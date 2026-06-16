@@ -71,6 +71,15 @@ pack-full: bundle-gdal pack
 dist-full: bundle-gdal dist
   @echo "✓ 完整分发包完成（含 GDAL）"
 
+# ── 图标 ────────────────────────────────────────────
+
+# 重新生成应用图标（SVG → .icns + PNG）
+icon:
+  @echo "=== 生成图标 ==="
+  node -e "const sharp=require('sharp');const fs=require('fs');const p=require('path');const svg='build/icon-duck.svg';const is='build/icon-duck.iconset';fs.mkdirSync(is,{recursive:true});const sz=[[16,16],[32,32],[128,128],[256,256],[512,512]];(async()=>{for(const[w,h]of sz){await sharp(svg,{density:144}).resize(w,h).png().toFile(p.join(is,'icon_'+w+'x'+h+'.png'));await sharp(svg,{density:288}).resize(w*2,h*2).png().toFile(p.join(is,'icon_'+w+'x'+h+'@2x.png'));}await sharp(svg,{density:144}).resize(512,512).png().toFile('build/icon-duck.png');})()"
+  iconutil -c icns build/icon-duck.iconset -o build/icon-duck.icns
+  @echo "✓ 图标已生成: build/icon-duck.icns + build/icon-duck.png"
+
 # ── 清理 ────────────────────────────────────────────
 
 # 清理构建产物

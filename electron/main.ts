@@ -83,13 +83,29 @@ let mainWindow: BrowserWindow | null = null;
 let agent: Agent | null = null;
 let conversationManager: ConversationManager | null = null;
 
+function getIconPath(): string | undefined {
+  const devPath = path.join(__dirname, '../../build/icon-duck.png');
+  if (fs.existsSync(devPath)) return devPath;
+  const prodPath = path.join(process.resourcesPath || '', 'icon-duck.png');
+  if (fs.existsSync(prodPath)) return prodPath;
+  return undefined;
+}
+
 function createWindow() {
+  // Set dock icon for development mode
+  if (process.platform === 'darwin') {
+    const iconPath = getIconPath();
+    if (iconPath) {
+      try { app.dock.setIcon(iconPath); } catch {}
+    }
+  }
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
     title: 'GISBuddy',
+    icon: getIconPath(),
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 14, y: 13 },
     webPreferences: {

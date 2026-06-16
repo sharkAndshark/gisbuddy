@@ -19,6 +19,7 @@
     "@types/node": "^20.0.0",
     "electron": "^30.0.0",
     "electron-builder": "^24.0.0",
+    "sharp": "^0.35.1",
     "typescript": "^5.4.0"
   },
   "build": {
@@ -27,6 +28,7 @@
     "directories": {
       "output": "release"
     },
+    "icon": "build/icon-duck.icns",
     "files": [
       "dist/**/*",
       "src/**/*",
@@ -36,9 +38,11 @@
       {
         "from": "gdal-bin/",
         "to": "gdal-bin",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
+      },
+      {
+        "from": "build/icon-duck.png",
+        "to": "icon-duck.png"
       }
     ],
     "mac": {
