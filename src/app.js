@@ -1,7 +1,5 @@
 const UI = {
-  configOverlay: document.getElementById('config-overlay'),
   app: document.getElementById('app'),
-  sidebar: document.querySelector('.sidebar'),
   convList: document.getElementById('conv-list'),
   newConvBtn: document.getElementById('new-conv-btn'),
   chatContainer: document.getElementById('chat-container'),
@@ -10,9 +8,6 @@ const UI = {
   welcome: document.getElementById('welcome'),
   convTitle: document.getElementById('conv-title'),
   convFolderBadge: document.getElementById('conv-folder-badge'),
-
-  apiKeyInput: document.getElementById('api-key'),
-  saveKeyBtn: document.getElementById('save-key'),
   settingsBtn: document.getElementById('settings-btn'),
   settingsModal: document.getElementById('settings-modal'),
   settingsKeyInput: document.getElementById('settings-api-key'),
@@ -44,33 +39,6 @@ UI.input.addEventListener('keydown', (e) => {
     sendMessage();
   }
 });
-
-UI.saveKeyBtn.addEventListener('click', initApp);
-
-UI.apiKeyInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') initApp();
-});
-
-async function initApp() {
-  const key = UI.apiKeyInput.value.trim();
-  if (!key) return;
-
-  UI.saveKeyBtn.disabled = true;
-  UI.saveKeyBtn.textContent = '验证中...';
-
-  try {
-    await window.gisbuddy.configure(key);
-    UI.configOverlay.classList.add('hidden');
-    UI.app.classList.remove('hidden');
-    localStorage.setItem('gisbuddy_api_key', key);
-    await loadConversations();
-  } catch (err) {
-    alert('配置失败: ' + err.message);
-  } finally {
-    UI.saveKeyBtn.disabled = false;
-    UI.saveKeyBtn.textContent = '开始使用';
-  }
-}
 
 function showSettings() {
   UI.settingsKeyInput.value = localStorage.getItem('gisbuddy_api_key') || '';
@@ -108,7 +76,6 @@ UI.settingsSave.addEventListener('click', async () => {
   try {
     await window.gisbuddy.configure(key);
     localStorage.setItem('gisbuddy_api_key', key);
-    UI.apiKeyInput.value = key;
     UI.settingsModal.classList.add('hidden');
   } catch (err) {
     alert('配置失败: ' + err.message);
@@ -292,7 +259,12 @@ async function sendMessage() {
       }
     }
   } catch (err) {
-    addSystemMessage('错误: ' + err.message);
+    if (err.message && err.message.includes('API Key')) {
+      addSystemMessage('请先在左下角 ⚙️ 设置中配置 DeepSeek API Key');
+      showSettings();
+    } else {
+      addSystemMessage('错误: ' + err.message);
+    }
   } finally {
     state.isProcessing = false;
     UI.sendBtn.disabled = !UI.input.value.trim();
@@ -382,14 +354,16 @@ function escHtml(str) {
   return d.innerHTML;
 }
 
-const observer = new MutationObserver(() => {
-  if (!UI.app.classList.contains('hidden') && state.currentConvId) {
-    UI.input.focus();
+// 启动
+(async () => {
+  const savedKey = localStorage.getItem('gisbuddy_api_key');
+  if (savedKey) {
+    try {
+      await window.gisbuddy.configure(savedKey);
+    } catch {
+      localStorage.removeItem('gisbuddy_api_key');
+    }
   }
-});
-observer.observe(UI.app, { attributes: true, attributeFilter: ['class'] });
-
-const savedKey = localStorage.getItem('gisbuddy_api_key');
-if (savedKey) {
-  UI.apiKeyInput.value = savedKey;
-}
+  await loadConversations();
+  UI.input.focus();
+})();

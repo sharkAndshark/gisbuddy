@@ -8,26 +8,16 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="config-overlay" class="config-overlay">
-    <div class="config-card">
-      <h1>GISBuddy</h1>
-      <p class="config-subtitle">AI 驱动的 GIS 数据处理助手</p>
-      <div class="config-form">
-        <label for="api-key">DeepSeek API Key</label>
-        <input type="password" id="api-key" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
-        <p class="config-hint">输入你的 DeepSeek API Key。可在 <a href="https://platform.deepseek.com/api_keys" target="_blank">platform.deepseek.com</a> 获取</p>
-        <button id="save-key">开始使用</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="app" class="app hidden">
+  <div id="app" class="app">
     <aside class="sidebar">
       <div class="sidebar-header">
         <div class="sidebar-title">对话列表</div>
         <button id="new-conv-btn" class="new-conv-btn" title="新建对话">✚</button>
       </div>
       <div id="conv-list" class="conv-list"></div>
+      <div class="sidebar-footer">
+        <button id="settings-btn" class="sidebar-settings-btn">⚙️ 设置</button>
+      </div>
     </aside>
 
     <div class="main-content">
@@ -36,9 +26,7 @@
           <h1 id="conv-title">GISBuddy</h1>
           <span id="conv-folder-badge" class="folder-badge hidden"></span>
         </div>
-        <div class="header-right">
-          <button id="settings-btn" class="icon-btn" title="设置">⚙️</button>
-        </div>
+        <div class="header-right"></div>
       </header>
 
       <main id="chat-container" class="chat-container">
