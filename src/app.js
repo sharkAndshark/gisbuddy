@@ -24,6 +24,8 @@ const UI = {
   profileCancel: document.getElementById('profile-cancel'),
   profileClose: document.getElementById('profile-close'),
   avatarPicker: document.getElementById('avatar-picker'),
+  fileList: document.getElementById('file-list'),
+  fileRefreshBtn: document.getElementById('file-refresh-btn'),
 };
 
 let userProfile = { username: '用户', avatar: DEFAULT_AVATAR };
@@ -34,6 +36,7 @@ let state = {
   currentConvId: null,
   isProcessing: false,
   cleanupListener: null,
+  currentDir: null,
 };
 
 function autoResize(el) {
@@ -266,7 +269,75 @@ function showNoConversation() {
   UI.input.disabled = true;
   UI.input.placeholder = '选择一个对话后开始...';
   UI.sendBtn.disabled = true;
+  UI.fileList.innerHTML = '';
 }
+
+const FILE_ICONS = {
+  '.tif': '🖼️', '.tiff': '🖼️', '.shp': '🗺️', '.geojson': '📋',
+  '.json': '📋', '.gpkg': '🗄️', '.csv': '📊', '.xml': '📄',
+  '.jpg': '🖼️', '.jpeg': '🖼️', '.png': '🖼️',
+};
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function escAttr(s) {
+  return s.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function refreshFileList() {
+  const conv = state.conversations.find(c => c.id === state.currentConvId);
+  if (!conv) { UI.fileList.innerHTML = ''; return; }
+  if (!state.currentDir) state.currentDir = conv.folderPath;
+  try {
+    const entries = await window.gisbuddy.listDirectory(state.currentDir);
+    renderFileList(entries);
+  } catch {
+    UI.fileList.innerHTML = '<div class="file-entry" style="color:var(--text-muted);padding:16px;text-align:center">无法读取目录</div>';
+  }
+}
+
+function renderFileList(entries) {
+  const rootDir = state.conversations.find(c => c.id === state.currentConvId)?.folderPath;
+  const isRoot = state.currentDir === rootDir;
+
+  let html = '';
+  if (!isRoot) {
+    html += '<div class="file-entry nav-up" data-nav-up="1"><span class="file-icon">⬆️</span><span class="file-name">..</span></div>';
+  }
+  for (const e of entries) {
+    html += '<div class="file-entry' + (e.isDirectory ? ' folder' : '') + '" data-path="' + escAttr(e.path) + '">'
+      + '<span class="file-icon">' + (e.isDirectory ? '📁' : (FILE_ICONS[e.ext] || '📄')) + '</span>'
+      + '<span class="file-name">' + escHtml(e.name) + '</span>'
+      + (e.isDirectory ? '' : '<span class="file-size">' + formatSize(e.size) + '</span>')
+      + '</div>';
+  }
+  UI.fileList.innerHTML = html;
+
+  UI.fileList.querySelectorAll('.file-entry.nav-up').forEach(el => {
+    el.addEventListener('click', () => {
+      state.currentDir = pathDirname(state.currentDir);
+      refreshFileList();
+    });
+  });
+  UI.fileList.querySelectorAll('.file-entry.folder').forEach(el => {
+    el.addEventListener('click', () => {
+      state.currentDir = el.dataset.path;
+      refreshFileList();
+    });
+  });
+}
+
+function pathDirname(p) {
+  const idx = p.lastIndexOf('/');
+  if (idx <= 0) return '/';
+  return p.slice(0, idx);
+}
+
+UI.fileRefreshBtn.addEventListener('click', refreshFileList);
 
 async function switchConversation(convId) {
   state.currentConvId = convId;
@@ -286,6 +357,8 @@ async function switchConversation(convId) {
     UI.convTitle.textContent = conv.title;
     UI.convFolderBadge.textContent = '📁 ' + conv.folderPath;
     UI.convFolderBadge.classList.remove('hidden');
+    state.currentDir = conv.folderPath;
+    refreshFileList();
   }
 
   const messages = await window.gisbuddy.getMessages(convId);
@@ -351,6 +424,7 @@ function handleAgentEvent(event) {
       break;
     case 'tool_result':
       updateToolResult(event.data.name, event.data.success);
+      refreshFileList();
       break;
     case 'text':
       addAiMessage(event.data);

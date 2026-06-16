@@ -150,6 +150,25 @@ ipcMain.handle('get-messages', (_event, id: string) => {
   return conversationManager?.getMessages(id) || [];
 });
 
+ipcMain.handle('list-directory', async (_event, dirPath: string) => {
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  return entries
+    .filter(e => !e.name.startsWith('.'))
+    .map(e => {
+      const fullPath = path.join(dirPath, e.name);
+      return {
+        name: e.name,
+        path: fullPath,
+        isDirectory: e.isDirectory(),
+        size: e.isFile() ? fs.statSync(fullPath).size : 0,
+        ext: e.isFile() ? path.extname(e.name).toLowerCase() : '',
+      };
+    })
+    .sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+});
 
 ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: string }) => {
   if (!agent || !conversationManager) {
