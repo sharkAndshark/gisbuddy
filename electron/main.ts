@@ -90,6 +90,8 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     title: 'GISBuddy',
+    titleBarStyle: 'hidden',
+    trafficLightPosition: { x: 14, y: 13 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

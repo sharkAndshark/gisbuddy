@@ -9,46 +9,92 @@
 </head>
 <body>
   <div id="app" class="app">
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-title">对话列表</div>
-        <button id="new-conv-btn" class="new-conv-btn" title="新建对话">✚</button>
-      </div>
-      <div id="conv-list" class="conv-list"></div>
-      <div class="sidebar-footer">
-        <button id="settings-btn" class="sidebar-settings-btn">⚙️ 设置</button>
-      </div>
-    </aside>
+    <div class="titlebar">
+      <button id="avatar-btn" class="avatar-btn" title="个人资料"></button>
+    </div>
 
-    <div class="main-content">
-      <header class="app-header">
-        <div class="header-left">
-          <h1 id="conv-title">GISBuddy</h1>
-          <span id="conv-folder-badge" class="folder-badge hidden"></span>
+    <div class="app-body">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-title">对话列表</div>
+          <button id="new-conv-btn" class="new-conv-btn" title="新建对话">✚</button>
         </div>
-        <div class="header-right"></div>
-      </header>
+        <div id="conv-list" class="conv-list"></div>
+        <div class="sidebar-footer">
+          <button id="settings-btn" class="sidebar-settings-btn">⚙️ 设置</button>
+        </div>
+      </aside>
 
-      <main id="chat-container" class="chat-container">
-        <div class="welcome" id="welcome">
-          <div class="welcome-icon">🌍</div>
-          <h2>你好！我是 GISBuddy</h2>
-          <p>选择一个对话，或新建一个对话开始处理 GIS 数据</p>
-          <div class="suggestions">
-            <button class="suggestion" data-msg="查看当前目录有哪些文件">📂 查看目录文件</button>
-            <button class="suggestion" data-msg="用 gdalinfo 查看 data.tif 的信息">🔍 探查栅格数据</button>
-            <button class="suggestion" data-msg="把 data.shp 转换成 GeoJSON">🔄 格式转换</button>
-            <button class="suggestion" data-msg="用 gdalwarp 把数据重投影到 EPSG:4326">🗺️ 重投影</button>
+      <div class="main-content">
+        <header class="app-header">
+          <div class="header-left">
+            <h1 id="conv-title">GISBuddy</h1>
+            <span id="conv-folder-badge" class="folder-badge hidden"></span>
           </div>
-        </div>
-      </main>
+        </header>
 
-      <footer class="input-area">
-        <div class="input-wrapper">
-          <textarea id="input" rows="1" placeholder="选择一个对话后开始..." disabled></textarea>
-          <button id="send-btn" class="send-btn" disabled>发送</button>
+        <main id="chat-container" class="chat-container">
+          <div class="welcome" id="welcome">
+            <div class="welcome-icon">🌍</div>
+            <h2>你好！我是 GISBuddy</h2>
+            <p>选择一个对话，或新建一个对话开始处理 GIS 数据</p>
+            <div class="suggestions">
+              <button class="suggestion" data-msg="查看当前目录有哪些文件">📂 查看目录文件</button>
+              <button class="suggestion" data-msg="用 gdalinfo 查看 data.tif 的信息">🔍 探查栅格数据</button>
+              <button class="suggestion" data-msg="把 data.shp 转换成 GeoJSON">🔄 格式转换</button>
+              <button class="suggestion" data-msg="用 gdalwarp 把数据重投影到 EPSG:4326">🗺️ 重投影</button>
+            </div>
+          </div>
+        </main>
+
+        <footer class="input-area">
+          <div class="input-wrapper">
+            <textarea id="input" rows="1" placeholder="选择一个对话后开始..." disabled></textarea>
+            <button id="send-btn" class="send-btn" disabled>发送</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </div>
+
+  <div id="profile-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>个人资料</h3>
+        <button id="profile-close" class="icon-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <label for="profile-username">用户名</label>
+        <input type="text" id="profile-username" placeholder="输入用户名" maxlength="20" />
+        <label style="margin-top:16px;display:block">头像</label>
+        <div class="avatar-picker" id="avatar-picker">
+          <button class="avatar-option">🌍</button>
+          <button class="avatar-option">🌎</button>
+          <button class="avatar-option">🌏</button>
+          <button class="avatar-option">🗺️</button>
+          <button class="avatar-option">🏔️</button>
+          <button class="avatar-option">🏖️</button>
+          <button class="avatar-option">🏙️</button>
+          <button class="avatar-option">🌄</button>
+          <button class="avatar-option">🌅</button>
+          <button class="avatar-option">🗾</button>
+          <button class="avatar-option">🏝️</button>
+          <button class="avatar-option">🌋</button>
+          <button class="avatar-option">🏞️</button>
+          <button class="avatar-option">🌲</button>
+          <button class="avatar-option">🌸</button>
+          <button class="avatar-option">🦅</button>
+          <button class="avatar-option">🐉</button>
+          <button class="avatar-option">🐼</button>
+          <button class="avatar-option">🦊</button>
+          <button class="avatar-option">🐬</button>
         </div>
-      </footer>
+      </div>
+      <div class="modal-footer">
+        <button id="profile-cancel" class="btn btn-secondary">取消</button>
+        <button id="profile-save" class="btn btn-primary">保存</button>
+      </div>
     </div>
   </div>
 

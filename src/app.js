@@ -1,3 +1,6 @@
+const DEFAULT_AVATAR = '🌍';
+const AVATARS = ['🌍','🌎','🌏','🗺️','🏔️','🏖️','🏙️','🌄','🌅','🗾','🏝️','🌋','🏞️','🌲','🌸','🦅','🐉','🐼','🦊','🐬'];
+
 const UI = {
   app: document.getElementById('app'),
   convList: document.getElementById('conv-list'),
@@ -14,7 +17,17 @@ const UI = {
   settingsSave: document.getElementById('settings-save'),
   settingsCancel: document.getElementById('settings-cancel'),
   settingsClose: document.getElementById('settings-close'),
+  avatarBtn: document.getElementById('avatar-btn'),
+  profileModal: document.getElementById('profile-modal'),
+  profileUsername: document.getElementById('profile-username'),
+  profileSave: document.getElementById('profile-save'),
+  profileCancel: document.getElementById('profile-cancel'),
+  profileClose: document.getElementById('profile-close'),
+  avatarPicker: document.getElementById('avatar-picker'),
 };
+
+let userProfile = { username: '用户', avatar: DEFAULT_AVATAR };
+let selectedAvatar = DEFAULT_AVATAR;
 
 let state = {
   conversations: [],
@@ -83,6 +96,62 @@ UI.settingsSave.addEventListener('click', async () => {
     UI.settingsSave.disabled = false;
     UI.settingsSave.textContent = '保存';
   }
+});
+
+function loadProfile() {
+  userProfile.username = localStorage.getItem('gisbuddy_username') || '用户';
+  userProfile.avatar = localStorage.getItem('gisbuddy_avatar') || DEFAULT_AVATAR;
+  UI.avatarBtn.textContent = userProfile.avatar;
+  UI.avatarBtn.title = userProfile.username;
+}
+
+function saveProfile() {
+  localStorage.setItem('gisbuddy_username', userProfile.username);
+  localStorage.setItem('gisbuddy_avatar', userProfile.avatar);
+  UI.avatarBtn.textContent = userProfile.avatar;
+  UI.avatarBtn.title = userProfile.username;
+}
+
+function showProfile() {
+  selectedAvatar = userProfile.avatar;
+  UI.profileUsername.value = userProfile.username;
+
+  const options = UI.avatarPicker.querySelectorAll('.avatar-option');
+  options.forEach(el => {
+    el.classList.toggle('selected', el.textContent === selectedAvatar);
+  });
+
+  UI.profileModal.classList.remove('hidden');
+}
+
+UI.avatarBtn.addEventListener('click', showProfile);
+
+UI.profileClose.addEventListener('click', () => UI.profileModal.classList.add('hidden'));
+UI.profileCancel.addEventListener('click', () => UI.profileModal.classList.add('hidden'));
+UI.profileModal.addEventListener('click', (e) => {
+  if (e.target === UI.profileModal || e.target.classList.contains('modal-backdrop')) {
+    UI.profileModal.classList.add('hidden');
+  }
+});
+
+UI.avatarPicker.addEventListener('click', (e) => {
+  const btn = e.target.closest('.avatar-option');
+  if (!btn) return;
+  UI.avatarPicker.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedAvatar = btn.textContent;
+});
+
+UI.profileSave.addEventListener('click', () => {
+  const name = UI.profileUsername.value.trim();
+  if (name) userProfile.username = name;
+  userProfile.avatar = selectedAvatar;
+  saveProfile();
+  UI.profileModal.classList.add('hidden');
+});
+
+UI.profileUsername.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') UI.profileSave.click();
 });
 
 UI.newConvBtn.addEventListener('click', async () => {
@@ -356,6 +425,7 @@ function escHtml(str) {
 
 // 启动
 (async () => {
+  loadProfile();
   const savedKey = localStorage.getItem('gisbuddy_api_key');
   if (savedKey) {
     try {
