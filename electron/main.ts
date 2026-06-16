@@ -211,7 +211,19 @@ ipcMain.handle('get-messages', (_event, id: string) => {
   return conversationManager?.getMessages(id) || [];
 });
 
-const TEXT_EXTS = new Set(['.json','.geojson','.xml','.csv','.txt','.md','.yml','.yaml','.js','.py','.sh','.env','.gitignore','.log','.html','.css','.ts','.jsx','.tsx','.toml','.cfg','.conf','.ini','.sql','.glsl','.r','.m']);
+const TEXT_EXTS = new Set(['.json','.xml','.csv','.txt','.md','.yml','.yaml','.js','.py','.sh','.env','.gitignore','.log','.html','.css','.ts','.jsx','.tsx','.toml','.cfg','.conf','.ini','.sql','.glsl','.r','.m']);
+
+function isCompatibleCRS(geojson: any): boolean {
+  if (!geojson || typeof geojson !== 'object') return false;
+  const crs = geojson.crs;
+  if (!crs) return true; // RFC 7946: no crs → WGS84
+  const name = crs?.properties?.name;
+  if (!name || typeof name !== 'string') return true;
+  const m = name.match(/(\d+)/);
+  if (!m) return false;
+  const code = parseInt(m[1], 10);
+  return code === 4326 || code === 3857;
+}
 const IMAGE_EXTS = new Set(['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp']);
 
 ipcMain.handle('read-file', async (_event, filePath: string) => {
@@ -228,12 +240,30 @@ ipcMain.handle('read-file', async (_event, filePath: string) => {
       return { type: 'image', content: `data:${mime};base64,${buf.toString('base64')}`, name: path.basename(filePath) };
     }
 
+    if (ext === '.geojson') {
+      if (stat.size > 50 * 1024 * 1024) {
+        return { type: 'error', message: 'GeoJSON 文件超过 50MB，建议使用 Agent 处理' };
+      }
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      try {
+        const parsed = JSON.parse(raw);
+        if (isCompatibleCRS(parsed)) {
+          return { type: 'geojson', content: parsed, name: path.basename(filePath) };
+        }
+      } catch {}
+      try {
+        return { type: 'text', content: JSON.stringify(JSON.parse(raw), null, 2), name: path.basename(filePath) };
+      } catch {
+        return { type: 'text', content: raw, name: path.basename(filePath) };
+      }
+    }
+
     if (TEXT_EXTS.has(ext) || !ext) {
       if (stat.size > 512 * 1024) {
         return { type: 'error', message: '文本文件超过 512KB，建议使用 Agent 查看' };
       }
       let content = fs.readFileSync(filePath, 'utf-8');
-      if (ext === '.json' || ext === '.geojson') {
+      if (ext === '.json') {
         try { content = JSON.stringify(JSON.parse(content), null, 2); } catch {}
       }
       return { type: 'text', content, name: path.basename(filePath) };

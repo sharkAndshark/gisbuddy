@@ -596,6 +596,15 @@ body {
   font-size: 14px;
 }
 
+.file-view.map-active {
+  padding: 0;
+}
+.file-view #map {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+}
+
 /* === Header === */
 .avatar-btn {
   width: 32px;

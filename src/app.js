@@ -437,12 +437,51 @@ async function loadFileContent(filePath) {
   }
 }
 
+let mapInstance = null;
+
 function renderFileInView(data) {
   if (data.type === 'text') {
+    UI.fileView.classList.remove('map-active');
     UI.fileView.innerHTML = '<pre>' + escHtml(data.content) + '</pre>';
   } else if (data.type === 'image') {
+    UI.fileView.classList.remove('map-active');
     UI.fileView.innerHTML = '<img src="' + data.content + '" alt="' + escAttr(data.name) + '">';
+  } else if (data.type === 'geojson') {
+    if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+    UI.fileView.classList.add('map-active');
+    UI.fileView.innerHTML = '<div id="map"></div>';
+
+    const map = L.map('map', { zoomControl: true });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(map);
+
+    const geojsonLayer = L.geoJSON(data.content, {
+      pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
+        radius: 6,
+        fillColor: '#3388ff',
+        color: '#fff',
+        weight: 2,
+        fillOpacity: 0.8,
+      }),
+    }).addTo(map);
+
+    if (geojsonLayer.getLayers().length === 0) {
+      map.setView([0, 0], 2);
+    } else {
+      const bounds = geojsonLayer.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [20, 20] });
+      } else {
+        map.setView([0, 0], 2);
+      }
+    }
+
+    setTimeout(() => map.invalidateSize(), 0);
+    mapInstance = map;
   } else {
+    UI.fileView.classList.remove('map-active');
     UI.fileView.innerHTML = '<div class="file-view-error">' + escHtml(data.message) + '</div>';
   }
 }
