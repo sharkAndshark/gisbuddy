@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release/
+*.js.map
+.vscode/
+.DS_Store
+test-data/
+
+gdal-bin/
+!gdal-bin/.gitkeep
