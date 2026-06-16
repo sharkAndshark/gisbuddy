@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'el
 import * as path from 'path';
 import * as fs from 'fs';
 import { Agent, AgentEvent } from './agent';
+import shapefile from 'shapefile';
 
 interface Conversation {
   id: string;
@@ -226,6 +227,11 @@ function isCompatibleCRS(geojson: any): boolean {
 }
 const IMAGE_EXTS = new Set(['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp']);
 
+function extractEPSG(prjContent: string): number | null {
+  const m = prjContent.match(/AUTHORITY\["EPSG","(\d+)"\]/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 ipcMain.handle('read-file', async (_event, filePath: string) => {
   try {
     const ext = path.extname(filePath).toLowerCase();
@@ -255,6 +261,36 @@ ipcMain.handle('read-file', async (_event, filePath: string) => {
         return { type: 'text', content: JSON.stringify(JSON.parse(raw), null, 2), name: path.basename(filePath) };
       } catch {
         return { type: 'text', content: raw, name: path.basename(filePath) };
+      }
+    }
+
+    if (ext === '.shp') {
+      if (stat.size > 500 * 1024 * 1024) {
+        return { type: 'error', message: 'Shapefile 超过 500MB，建议使用 Agent 处理' };
+      }
+      const dbfPath = filePath.slice(0, -4) + '.dbf';
+      const prjPath = filePath.slice(0, -4) + '.prj';
+      let crsCompatible = true;
+      try {
+        if (fs.existsSync(prjPath)) {
+          const prjContent = fs.readFileSync(prjPath, 'utf-8');
+          const epsg = extractEPSG(prjContent);
+          if (epsg !== null && epsg !== 4326 && epsg !== 3857) {
+            crsCompatible = false;
+          }
+        }
+      } catch {}
+      if (!crsCompatible) {
+        return { type: 'error', message: 'Shapefile 坐标系非 4326/3857，无法叠加地图预览' };
+      }
+      try {
+        const geojson = await shapefile.read(
+          filePath,
+          fs.existsSync(dbfPath) ? dbfPath : null,
+        );
+        return { type: 'geojson', content: geojson, name: path.basename(filePath) };
+      } catch (e) {
+        return { type: 'error', message: 'Shapefile 解析失败: ' + (e as Error).message };
       }
     }
 

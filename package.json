@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "fast-xml-parser": "^5.9.0",
-    "openai": "^4.0.0"
+    "openai": "^4.0.0",
+    "shapefile": "^0.6.6"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -38,7 +39,9 @@
       {
         "from": "gdal-bin/",
         "to": "gdal-bin",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "build/icon-duck.png",
@@ -47,7 +50,9 @@
       {
         "from": "build/",
         "to": "./",
-        "filter": ["tray-icon*.png"]
+        "filter": [
+          "tray-icon*.png"
+        ]
       }
     ],
     "mac": {
