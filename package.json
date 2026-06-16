@@ -43,6 +43,11 @@
       {
         "from": "build/icon-duck.png",
         "to": "icon-duck.png"
+      },
+      {
+        "from": "build/",
+        "to": "./",
+        "filter": ["tray-icon*.png"]
       }
     ],
     "mac": {

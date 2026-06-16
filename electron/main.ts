@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Agent, AgentEvent } from './agent';
@@ -80,34 +80,65 @@ class ConversationManager {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 let agent: Agent | null = null;
 let conversationManager: ConversationManager | null = null;
+let isQuitting = false;
 
-function getIconPath(): string | undefined {
-  const devPath = path.join(__dirname, '../../build/icon-duck.png');
+function getIconPath(name: string): string | undefined {
+  const devPath = path.join(__dirname, '../../build/', name);
   if (fs.existsSync(devPath)) return devPath;
-  const prodPath = path.join(process.resourcesPath || '', 'icon-duck.png');
+  const prodPath = path.join(process.resourcesPath || '', name);
   if (fs.existsSync(prodPath)) return prodPath;
   return undefined;
 }
 
-function createWindow() {
-  // Set dock icon for development mode
-  if (process.platform === 'darwin') {
-    const iconPath = getIconPath();
-    if (iconPath) {
-      try { app.dock.setIcon(iconPath); } catch {}
+function createTray() {
+  const iconPath = getIconPath('tray-icon.png');
+  if (!iconPath) return;
+  const icon = nativeImage.createFromPath(iconPath);
+  icon.setTemplateImage(true);
+
+  tray = new Tray(icon);
+  tray.setToolTip('GISBuddy');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示 GISBuddy',
+      click: () => { mainWindow?.show(); mainWindow?.focus(); },
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => app.quit(),
+    },
+  ]);
+  tray.setContextMenu(contextMenu);
+
+  tray.on('click', () => {
+    if (mainWindow?.isVisible()) {
+      mainWindow?.hide();
+    } else {
+      mainWindow?.show();
+      mainWindow?.focus();
     }
+  });
+}
+
+function createWindow() {
+  if (process.platform === 'darwin') {
+    app.dock.hide();
   }
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
     title: 'GISBuddy',
-    icon: getIconPath(),
     titleBarStyle: 'hidden',
     trafficLightPosition: { x: 14, y: 13 },
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -117,21 +148,35 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../../src/index.html'));
 
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
   mainWindow.webContents.on('before-input-event', (_event, input) => {
     if (input.key === 'F12') {
       mainWindow?.webContents.toggleDevTools();
     }
   });
+
+  createTray();
 }
 
 app.whenReady().then(createWindow);
 
+app.on('before-quit', () => {
+  isQuitting = true;
+});
+
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  // tray keeps app alive
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  mainWindow?.show();
+  mainWindow?.focus();
 });
 
 ipcMain.handle('configure', async (_event, apiKey: string) => {
