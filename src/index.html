@@ -37,7 +37,6 @@
           <span id="conv-folder-badge" class="folder-badge hidden"></span>
         </div>
         <div class="header-right">
-          <button id="open-folder-btn" class="icon-btn" title="打开工作文件夹">📂</button>
           <button id="settings-btn" class="icon-btn" title="设置">⚙️</button>
         </div>
       </header>
@@ -62,6 +61,25 @@
           <button id="send-btn" class="send-btn" disabled>发送</button>
         </div>
       </footer>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>设置</h3>
+        <button id="settings-close" class="icon-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <label for="settings-api-key">DeepSeek API Key</label>
+        <input type="password" id="settings-api-key" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+        <p class="config-hint">可在 <a href="https://platform.deepseek.com/api_keys" target="_blank">platform.deepseek.com</a> 获取</p>
+      </div>
+      <div class="modal-footer">
+        <button id="settings-cancel" class="btn btn-secondary">取消</button>
+        <button id="settings-save" class="btn btn-primary">保存</button>
+      </div>
     </div>
   </div>
 

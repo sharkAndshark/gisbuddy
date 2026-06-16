@@ -10,10 +10,15 @@ const UI = {
   welcome: document.getElementById('welcome'),
   convTitle: document.getElementById('conv-title'),
   convFolderBadge: document.getElementById('conv-folder-badge'),
-  openFolderBtn: document.getElementById('open-folder-btn'),
+
   apiKeyInput: document.getElementById('api-key'),
   saveKeyBtn: document.getElementById('save-key'),
   settingsBtn: document.getElementById('settings-btn'),
+  settingsModal: document.getElementById('settings-modal'),
+  settingsKeyInput: document.getElementById('settings-api-key'),
+  settingsSave: document.getElementById('settings-save'),
+  settingsCancel: document.getElementById('settings-cancel'),
+  settingsClose: document.getElementById('settings-close'),
 };
 
 let state = {
@@ -67,10 +72,50 @@ async function initApp() {
   }
 }
 
-UI.settingsBtn.addEventListener('click', () => {
-  UI.configOverlay.classList.remove('hidden');
-  UI.app.classList.add('hidden');
-  UI.apiKeyInput.value = '';
+function showSettings() {
+  UI.settingsKeyInput.value = localStorage.getItem('gisbuddy_api_key') || '';
+  UI.settingsModal.classList.remove('hidden');
+  UI.settingsKeyInput.focus();
+}
+
+UI.settingsBtn.addEventListener('click', showSettings);
+
+UI.settingsClose.addEventListener('click', () => {
+  UI.settingsModal.classList.add('hidden');
+});
+
+UI.settingsCancel.addEventListener('click', () => {
+  UI.settingsModal.classList.add('hidden');
+});
+
+UI.settingsModal.addEventListener('click', (e) => {
+  if (e.target === UI.settingsModal || e.target.classList.contains('modal-backdrop')) {
+    UI.settingsModal.classList.add('hidden');
+  }
+});
+
+UI.settingsKeyInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') UI.settingsSave.click();
+});
+
+UI.settingsSave.addEventListener('click', async () => {
+  const key = UI.settingsKeyInput.value.trim();
+  if (!key) return;
+
+  UI.settingsSave.disabled = true;
+  UI.settingsSave.textContent = '保存中...';
+
+  try {
+    await window.gisbuddy.configure(key);
+    localStorage.setItem('gisbuddy_api_key', key);
+    UI.apiKeyInput.value = key;
+    UI.settingsModal.classList.add('hidden');
+  } catch (err) {
+    alert('配置失败: ' + err.message);
+  } finally {
+    UI.settingsSave.disabled = false;
+    UI.settingsSave.textContent = '保存';
+  }
 });
 
 UI.newConvBtn.addEventListener('click', async () => {
@@ -81,11 +126,6 @@ UI.newConvBtn.addEventListener('click', async () => {
   switchConversation(conv.id);
 });
 
-UI.openFolderBtn.addEventListener('click', async () => {
-  if (state.currentConvId) {
-    await window.gisbuddy.openFolder(state.currentConvId);
-  }
-});
 
 document.querySelectorAll('.suggestion').forEach((btn) => {
   btn.addEventListener('click', () => {

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Agent, AgentEvent } from './agent';
@@ -98,6 +98,12 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, '../../src/index.html'));
+
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (input.key === 'F12') {
+      mainWindow?.webContents.toggleDevTools();
+    }
+  });
 }
 
 app.whenReady().then(createWindow);
@@ -142,12 +148,6 @@ ipcMain.handle('get-messages', (_event, id: string) => {
   return conversationManager?.getMessages(id) || [];
 });
 
-ipcMain.handle('open-folder', async (_event, id: string) => {
-  const conv = conversationManager?.get(id);
-  if (conv) {
-    await shell.openPath(conv.folderPath);
-  }
-});
 
 ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: string }) => {
   if (!agent || !conversationManager) {

@@ -15,8 +15,6 @@ contextBridge.exposeInMainWorld('gisbuddy', {
 
   chat: (convId: string, text: string) => ipcRenderer.invoke('chat', { convId, text }),
 
-  openFolder: (id: string) => ipcRenderer.invoke('open-folder', id),
-
   onAgentEvent: (callback: (data: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: unknown) => callback(data);
     ipcRenderer.on('agent-event', handler);
