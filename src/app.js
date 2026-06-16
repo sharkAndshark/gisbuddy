@@ -590,7 +590,7 @@ function handleAgentEvent(event) {
       addToolCall(event.data.name, event.data.args);
       break;
     case 'tool_result':
-      updateToolResult(event.data.name, event.data.success);
+      updateToolResult(event.data.name, event.data.success, event.data.output);
       refreshFileList();
       break;
     case 'text':
@@ -605,19 +605,92 @@ function handleAgentEvent(event) {
 let currentToolEl = null;
 
 function addToolCall(name, args) {
-  const el = document.createElement('div');
-  el.className = 'tool-call';
-  el.dataset.toolName = name;
-  el.textContent = '🔧 ' + name;
-  UI.chatContainer.appendChild(el);
+  const card = document.createElement('div');
+  card.className = 'tool-call';
+  card.dataset.toolName = name;
+
+  const header = document.createElement('div');
+  header.className = 'tool-call-header';
+
+  const icon = document.createElement('span');
+  icon.className = 'tool-call-icon';
+  icon.textContent = '🔧';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'tool-call-name';
+  nameEl.textContent = name;
+
+  const summary = document.createElement('span');
+  summary.className = 'tool-call-summary';
+  if (name === 'bash' && args.command) {
+    summary.textContent = args.command;
+  } else if (args && args.path) {
+    summary.textContent = args.path;
+  } else if (args && args.content) {
+    const s = args.content;
+    summary.textContent = s.length > 60 ? s.slice(0, 60) + '...' : s;
+  }
+
+  const status = document.createElement('span');
+  status.className = 'tool-call-status';
+
+  const toggle = document.createElement('span');
+  toggle.className = 'tool-call-toggle';
+  toggle.textContent = '▶';
+
+  header.appendChild(icon);
+  header.appendChild(nameEl);
+  header.appendChild(summary);
+  header.appendChild(status);
+  header.appendChild(toggle);
+
+  const body = document.createElement('div');
+  body.className = 'tool-call-body hidden';
+
+  const cmdLine = document.createElement('div');
+  cmdLine.className = 'tool-call-command';
+  if (name === 'bash' && args.command) {
+    cmdLine.textContent = '$ ' + args.command;
+  } else {
+    cmdLine.textContent = JSON.stringify(args, null, 2);
+  }
+  body.appendChild(cmdLine);
+
+  const output = document.createElement('div');
+  output.className = 'tool-call-output';
+  body.appendChild(output);
+
+  header.addEventListener('click', () => {
+    const hidden = body.classList.toggle('hidden');
+    toggle.textContent = hidden ? '▶' : '▼';
+  });
+
+  card.appendChild(header);
+  card.appendChild(body);
+  UI.chatContainer.appendChild(card);
   scrollToBottom();
-  currentToolEl = el;
+  currentToolEl = card;
 }
 
-function updateToolResult(name, success) {
+function updateToolResult(name, success, output) {
   if (currentToolEl && currentToolEl.dataset.toolName === name) {
-    currentToolEl.textContent = '🔧 ' + name + '  ' + (success ? '✓' : '✗');
-    currentToolEl.className = 'tool-call ' + (success ? 'success' : 'error');
+    currentToolEl.className = 'tool-call' + (success ? ' success' : ' error');
+
+    const statusEl = currentToolEl.querySelector('.tool-call-status');
+    statusEl.textContent = success ? '✓' : '✗';
+
+    const outputEl = currentToolEl.querySelector('.tool-call-output');
+    if (output) {
+      const isError = !success && output.startsWith('错误:');
+      if (isError) {
+        outputEl.className = 'tool-call-output tool-call-error';
+        outputEl.textContent = output;
+      } else {
+        outputEl.className = 'tool-call-output';
+        outputEl.textContent = output;
+      }
+    }
+
     scrollToBottom();
   }
 }

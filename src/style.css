@@ -790,14 +790,110 @@ body {
 /* Tool Call */
 .tool-call {
   align-self: flex-start;
-  padding: 4px 0;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--text-muted);
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  overflow: hidden;
   animation: msg-in 0.2s ease-out;
 }
-.tool-call.success {
+
+.tool-call-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.tool-call-header:hover {
+  background: var(--sidebar-hover);
+}
+
+.tool-call-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.tool-call-name {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.tool-call-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-family: var(--font-mono);
   color: var(--text-secondary);
+}
+
+.tool-call-status {
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+}
+
+.tool-call-toggle {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.tool-call-body {
+  border-top: 1px solid var(--border);
+}
+
+.tool-call-command {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.tool-call-output {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.tool-call-output.tool-call-error {
+  color: #dc2626;
+}
+
+.tool-call.success {
+  border-left: 3px solid #16a34a;
+}
+.tool-call.success .tool-call-status {
+  color: #16a34a;
+}
+
+.tool-call.error {
+  border-left: 3px solid #dc2626;
+}
+.tool-call.error .tool-call-status {
+  color: #dc2626;
 }
 
 /* Markdown Styles */
