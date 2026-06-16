@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'el
 import * as path from 'path';
 import * as fs from 'fs';
 import { Agent, AgentEvent } from './agent';
-import shapefile from 'shapefile';
+import { read as readShapefile } from 'shapefile';
 
 interface Conversation {
   id: string;
@@ -284,9 +284,10 @@ ipcMain.handle('read-file', async (_event, filePath: string) => {
         return { type: 'error', message: 'Shapefile 坐标系非 4326/3857，无法叠加地图预览' };
       }
       try {
-        const geojson = await shapefile.read(
+        const geojson = await readShapefile(
           filePath,
           fs.existsSync(dbfPath) ? dbfPath : null,
+          { encoding: 'utf-8' },
         );
         return { type: 'geojson', content: geojson, name: path.basename(filePath) };
       } catch (e) {
