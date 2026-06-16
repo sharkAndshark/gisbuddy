@@ -203,9 +203,19 @@ function renderConvList() {
     item.className = 'conv-item' + (conv.id === state.currentConvId ? ' active' : '');
     item.dataset.convId = conv.id;
 
-    const titleSpan = document.createElement('span');
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'conv-item-info';
+
+    const titleSpan = document.createElement('div');
     titleSpan.className = 'conv-item-title';
     titleSpan.textContent = conv.title;
+
+    const folderSpan = document.createElement('div');
+    folderSpan.className = 'conv-item-folder';
+    folderSpan.textContent = '📁 ' + conv.folderPath;
+
+    infoDiv.appendChild(titleSpan);
+    infoDiv.appendChild(folderSpan);
 
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'conv-del-btn';
@@ -227,7 +237,7 @@ function renderConvList() {
       renderConvList();
     });
 
-    item.appendChild(titleSpan);
+    item.appendChild(infoDiv);
     item.appendChild(deleteBtn);
     item.addEventListener('click', () => switchConversation(conv.id));
 
@@ -239,9 +249,6 @@ function renderConvList() {
         const newTitle = input.value.trim() || conv.title;
         await window.gisbuddy.renameConversation(conv.id, newTitle);
         conv.title = newTitle;
-        if (state.currentConvId === conv.id) {
-          UI.convTitle.textContent = newTitle;
-        }
         renderConvList();
       });
       input.addEventListener('keydown', (e) => {
@@ -264,8 +271,6 @@ function showNoConversation() {
     const last = UI.chatContainer.lastElementChild;
     if (last && last !== UI.welcome) last.remove();
   }
-  UI.convTitle.textContent = 'GISBuddy';
-  UI.convFolderBadge.classList.add('hidden');
   UI.input.disabled = true;
   UI.input.placeholder = '选择一个对话后开始...';
   UI.sendBtn.disabled = true;
@@ -354,9 +359,6 @@ async function switchConversation(convId) {
 
   const conv = state.conversations.find(c => c.id === convId);
   if (conv) {
-    UI.convTitle.textContent = conv.title;
-    UI.convFolderBadge.textContent = '📁 ' + conv.folderPath;
-    UI.convFolderBadge.classList.remove('hidden');
     state.currentDir = conv.folderPath;
     refreshFileList();
   }
@@ -398,7 +400,6 @@ async function sendMessage() {
       const conv = state.conversations.find(c => c.id === state.currentConvId);
       if (conv && conv.title !== result.updatedTitle) {
         conv.title = result.updatedTitle;
-        UI.convTitle.textContent = result.updatedTitle;
         renderConvList();
       }
     }
