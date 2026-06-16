@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('gisbuddy', {
 
   listDirectory: (dirPath: string) => ipcRenderer.invoke('list-directory', dirPath),
 
+  readFile: (filePath: string) => ipcRenderer.invoke('read-file', filePath),
+
   onAgentEvent: (callback: (data: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: unknown) => callback(data);
     ipcRenderer.on('agent-event', handler);

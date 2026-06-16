@@ -150,6 +150,40 @@ ipcMain.handle('get-messages', (_event, id: string) => {
   return conversationManager?.getMessages(id) || [];
 });
 
+const TEXT_EXTS = new Set(['.json','.geojson','.xml','.csv','.txt','.md','.yml','.yaml','.js','.py','.sh','.env','.gitignore','.log','.html','.css','.ts','.jsx','.tsx','.toml','.cfg','.conf','.ini','.sql','.glsl','.r','.m']);
+const IMAGE_EXTS = new Set(['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp']);
+
+ipcMain.handle('read-file', async (_event, filePath: string) => {
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    const stat = fs.statSync(filePath);
+
+    if (IMAGE_EXTS.has(ext)) {
+      if (stat.size > 10 * 1024 * 1024) {
+        return { type: 'error', message: '图片文件超过 10MB，建议使用 Agent 处理' };
+      }
+      const buf = fs.readFileSync(filePath);
+      const mime = ext === '.svg' ? 'image/svg+xml' : 'image/' + ext.slice(1);
+      return { type: 'image', content: `data:${mime};base64,${buf.toString('base64')}`, name: path.basename(filePath) };
+    }
+
+    if (TEXT_EXTS.has(ext) || !ext) {
+      if (stat.size > 512 * 1024) {
+        return { type: 'error', message: '文本文件超过 512KB，建议使用 Agent 查看' };
+      }
+      let content = fs.readFileSync(filePath, 'utf-8');
+      if (ext === '.json' || ext === '.geojson') {
+        try { content = JSON.stringify(JSON.parse(content), null, 2); } catch {}
+      }
+      return { type: 'text', content, name: path.basename(filePath) };
+    }
+
+    return { type: 'error', message: '无法预览此文件类型，可尝试在对话中让 Agent 处理' };
+  } catch (err) {
+    return { type: 'error', message: '读取文件失败: ' + (err as Error).message };
+  }
+});
+
 ipcMain.handle('list-directory', async (_event, dirPath: string) => {
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
   return entries

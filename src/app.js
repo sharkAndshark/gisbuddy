@@ -9,8 +9,6 @@ const UI = {
   input: document.getElementById('input'),
   sendBtn: document.getElementById('send-btn'),
   welcome: document.getElementById('welcome'),
-  convTitle: document.getElementById('conv-title'),
-  convFolderBadge: document.getElementById('conv-folder-badge'),
   settingsBtn: document.getElementById('settings-btn'),
   settingsModal: document.getElementById('settings-modal'),
   settingsKeyInput: document.getElementById('settings-api-key'),
@@ -26,6 +24,9 @@ const UI = {
   avatarPicker: document.getElementById('avatar-picker'),
   fileList: document.getElementById('file-list'),
   fileRefreshBtn: document.getElementById('file-refresh-btn'),
+  tabBar: document.getElementById('tab-bar'),
+  fileView: document.getElementById('file-view'),
+  inputArea: document.querySelector('.input-area'),
 };
 
 let userProfile = { username: '用户', avatar: DEFAULT_AVATAR };
@@ -37,6 +38,9 @@ let state = {
   isProcessing: false,
   cleanupListener: null,
   currentDir: null,
+  tabs: [],
+  activeTabId: null,
+  fileContents: {},
 };
 
 function autoResize(el) {
@@ -266,6 +270,7 @@ function renderConvList() {
 }
 
 function showNoConversation() {
+  switchTab('chat');
   UI.welcome.style.display = '';
   while (UI.chatContainer.children.length > 1) {
     const last = UI.chatContainer.lastElementChild;
@@ -334,6 +339,11 @@ function renderFileList(entries) {
       refreshFileList();
     });
   });
+  UI.fileList.querySelectorAll('.file-entry:not(.folder):not(.nav-up)').forEach(el => {
+    el.addEventListener('click', () => {
+      openFileTab(el.dataset.path);
+    });
+  });
 }
 
 function pathDirname(p) {
@@ -344,8 +354,125 @@ function pathDirname(p) {
 
 UI.fileRefreshBtn.addEventListener('click', refreshFileList);
 
+/* === Tabs === */
+function initTabs() {
+  state.tabs = [{ id: 'chat', label: '💬 对话', closable: false }];
+  state.activeTabId = 'chat';
+  renderTabs();
+  showChatView();
+}
+
+function renderTabs() {
+  UI.tabBar.innerHTML = state.tabs.map(t =>
+    '<div class="tab-item' + (t.id === state.activeTabId ? ' active' : '') + '" data-tab-id="' + t.id + '">'
+      + escHtml(t.label)
+      + (t.closable ? '<span class="tab-close" data-tab-close="' + t.id + '">✕</span>' : '')
+    + '</div>'
+  ).join('');
+
+  UI.tabBar.querySelectorAll('.tab-item').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.dataset.tabClose) return;
+      switchTab(el.dataset.tabId);
+    });
+  });
+  UI.tabBar.querySelectorAll('[data-tab-close]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeTab(el.dataset.tabClose);
+    });
+  });
+}
+
+function switchTab(tabId) {
+  if (tabId === state.activeTabId) return;
+  state.activeTabId = tabId;
+  renderTabs();
+  if (tabId === 'chat') {
+    showChatView();
+  } else {
+    showFileView(tabId);
+  }
+}
+
+function showChatView() {
+  UI.chatContainer.classList.remove('hidden');
+  UI.fileView.classList.add('hidden');
+  UI.inputArea.classList.remove('hidden');
+  if (!state.currentConvId) {
+    UI.input.disabled = true;
+    UI.input.placeholder = '选择一个对话后开始...';
+  } else {
+    UI.input.disabled = false;
+    UI.input.placeholder = '输入你的 GIS 数据处理需求...';
+  }
+  UI.sendBtn.disabled = !UI.input.value.trim() || state.isProcessing || !state.currentConvId;
+}
+
+function showFileView(filePath) {
+  UI.chatContainer.classList.add('hidden');
+  UI.inputArea.classList.add('hidden');
+  UI.fileView.classList.remove('hidden');
+
+  const cached = state.fileContents[filePath];
+  if (cached) {
+    renderFileInView(cached);
+    return;
+  }
+  UI.fileView.innerHTML = '<div class="file-view-content" style="text-align:center;padding:48px;color:var(--text-muted)">加载中...</div>';
+  loadFileContent(filePath);
+}
+
+async function loadFileContent(filePath) {
+  try {
+    const result = await window.gisbuddy.readFile(filePath);
+    state.fileContents[filePath] = result;
+    if (state.activeTabId === filePath) {
+      renderFileInView(result);
+    }
+  } catch (e) {
+    const errResult = { type: 'error', message: '读取失败: ' + e.message };
+    state.fileContents[filePath] = errResult;
+    if (state.activeTabId === filePath) renderFileInView(errResult);
+  }
+}
+
+function renderFileInView(data) {
+  if (data.type === 'text') {
+    UI.fileView.innerHTML = '<pre>' + escHtml(data.content) + '</pre>';
+  } else if (data.type === 'image') {
+    UI.fileView.innerHTML = '<img src="' + data.content + '" alt="' + escAttr(data.name) + '">';
+  } else {
+    UI.fileView.innerHTML = '<div class="file-view-error">' + escHtml(data.message) + '</div>';
+  }
+}
+
+function openFileTab(filePath) {
+  const exist = state.tabs.find(t => t.id === filePath);
+  if (exist) {
+    switchTab(filePath);
+    return;
+  }
+  const name = filePath.split('/').pop() || filePath;
+  state.tabs.push({ id: filePath, label: '📄 ' + name, closable: true });
+  switchTab(filePath);
+}
+
+function closeTab(tabId) {
+  if (tabId === 'chat') return;
+  state.tabs = state.tabs.filter(t => t.id !== tabId);
+  delete state.fileContents[tabId];
+  if (state.activeTabId === tabId) {
+    switchTab('chat');
+  } else {
+    renderTabs();
+  }
+}
+
 async function switchConversation(convId) {
   state.currentConvId = convId;
+
+  switchTab('chat');
 
   while (UI.chatContainer.children.length > 1) {
     const last = UI.chatContainer.lastElementChild;
@@ -511,6 +638,7 @@ function escHtml(str) {
       localStorage.removeItem('gisbuddy_api_key');
     }
   }
+  initTabs();
   await loadConversations();
   UI.input.focus();
 })();
