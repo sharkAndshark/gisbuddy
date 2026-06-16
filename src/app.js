@@ -53,6 +53,8 @@ UI.input.addEventListener('keydown', (e) => {
   }
 });
 
+UI.sendBtn.addEventListener('click', sendMessage);
+
 function showSettings() {
   UI.settingsKeyInput.value = localStorage.getItem('gisbuddy_api_key') || '';
   UI.settingsModal.classList.remove('hidden');
@@ -382,7 +384,7 @@ function updateToolResult(name, success) {
 function addUserMessage(text) {
   const div = document.createElement('div');
   div.className = 'message user';
-  div.innerHTML = '<div class="avatar">👤</div><div class="bubble">' + escHtml(text) + '</div>';
+  div.innerHTML = '<div class="bubble">' + escHtml(text) + '</div>';
   UI.chatContainer.appendChild(div);
   scrollToBottom();
 }
@@ -398,7 +400,7 @@ function addAiMessage(html) {
     rendered = escHtml(html).replace(/\n/g, '<br>');
   }
 
-  div.innerHTML = '<div class="avatar">🤖</div><div class="bubble">' + rendered + '</div>';
+  div.innerHTML = '<div class="bubble">' + rendered + '</div>';
   UI.chatContainer.appendChild(div);
   scrollToBottom();
 }
