@@ -631,9 +631,19 @@ function handleAgentEvent(event) {
       refreshFileList();
       break;
     case 'text':
+      if (streamTextEl) {
+        let rendered;
+        try {
+          rendered = marked.parse(event.data, { breaks: true });
+        } catch {
+          rendered = escHtml(event.data).replace(/\n/g, '<br>');
+        }
+        streamTextEl.innerHTML = rendered;
+      } else {
+        addAiMessage(event.data);
+      }
       streamThinkingEl = null;
       streamTextEl = null;
-      addAiMessage(event.data);
       break;
     case 'error':
       streamThinkingEl = null;
