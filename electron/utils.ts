@@ -3,12 +3,12 @@ export function isCompatibleCRS(geojson: unknown): boolean {
   const obj = geojson as Record<string, unknown>;
   const crs = obj.crs;
   if (!crs) return true; // RFC 7946: no crs → WGS84
-  if (typeof crs !== 'object') return true;
+  if (typeof crs !== 'object') return false; // malformed (string, number, etc.) → reject
   const crsObj = crs as Record<string, unknown>;
   const props = crsObj.properties;
-  if (!props || typeof props !== 'object') return true;
+  if (!props || typeof props !== 'object') return false; // malformed properties → reject
   const name = (props as Record<string, unknown>).name;
-  if (!name || typeof name !== 'string') return true;
+  if (!name || typeof name !== 'string') return false; // unparseable name → reject
   const m = name.match(/(\d+)/);
   if (!m) return false;
   const code = parseInt(m[1], 10);

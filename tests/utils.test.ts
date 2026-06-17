@@ -57,8 +57,13 @@ describe('isCompatibleCRS', () => {
     expect(isCompatibleCRS('string')).toBe(false);
   });
 
-  it('handles CRS without properties', () => {
-    expect(isCompatibleCRS({ crs: { type: 'name' } })).toBe(true);
+  it('returns false for malformed CRS fields', () => {
+    expect(isCompatibleCRS({ crs: null })).toBe(true);   // null crs → no crs (RFC 7946)
+    expect(isCompatibleCRS({ crs: 'EPSG:4326' })).toBe(false);  // string crs is malformed
+    expect(isCompatibleCRS({ crs: 0 })).toBe(true);  // 0 is falsy → no crs
+    expect(isCompatibleCRS({ crs: { type: 'name' } })).toBe(false);  // missing properties
+    expect(isCompatibleCRS({ crs: { type: 'name', properties: null } })).toBe(false);
+    expect(isCompatibleCRS({ crs: { type: 'name', properties: 'bad' } })).toBe(false);
   });
 
   it('handles CRS with malformed name', () => {

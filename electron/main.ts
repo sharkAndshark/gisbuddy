@@ -355,7 +355,7 @@ ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: s
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('agent-event', eventData);
       }
-    } catch { /* window may have been destroyed during send */ }
+    } catch { console.warn('[safeSend] failed to send event, window likely destroyed'); }
   };
 
   try {

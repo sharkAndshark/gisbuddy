@@ -24,7 +24,6 @@ const C = {
   SUCCESS: ' success',
   ERROR: ' error',
   HIDDEN: 'hidden',
-  WELCOME: 'welcome',
 };
 
 const MAX_FILE_CACHE = 20;
