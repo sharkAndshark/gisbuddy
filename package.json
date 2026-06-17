@@ -12,6 +12,7 @@
     "dist": "electron-builder",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:behaviors": "node scripts/check-behaviors.js behaviors.md --warn",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "husky"
