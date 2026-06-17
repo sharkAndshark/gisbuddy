@@ -129,7 +129,7 @@
 | Electron Main | B96 | 托盘点击切换窗口显隐 | `electron/main.ts:46-53` | 无 | — | 1 | 难解耦 / ✓ 认可 | 依赖 Tray 和 BrowserWindow |
 | Electron Main | B97 | F12 键切换开发者工具 | `electron/main.ts:86-89` | 无 | — | 1 | 难解耦 / ✓ 认可 | 开发便捷功能，非核心 |
 | Electron Main | B98 | 关闭按钮隐藏窗口而非退出 | `electron/main.ts:79-84` | 无 | — | 1 | 难解耦 / ✓ 认可 | macOS 特有行为 |
-| Electron Main | B99 | getIconPath 开发/生产路径兼容 | `electron/main.ts:16-22` | 无 | — | 2 | 可解耦 / ✓ 认可 | 非关键逻辑 |
+| Electron Main | B99 | getIconPath 开发/生产路径兼容 | `electron/main.ts:16-22` | 无 | — | 2 | 可解耦 / ⚠ 应测 | 非关键逻辑，合理性=2 已豁免 |
 
 ## Renderer — UI 层
 

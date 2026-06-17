@@ -69,10 +69,32 @@ for (let i = headerIdx + 1; i < allRows.length; i++) {
   const row = allRows[i];
   if (isHeaderRow(row)) continue;
   if (row.length <= Math.max(colTestId, colReason, colExempt)) continue; // too short
+  // Only accept rows whose behavior ID matches B\d+ pattern
+  const bid = (row[1] || '').trim();
+  if (!/^B\d+$/.test(bid)) continue;
   dataRows.push(row);
 }
 
 // ── Analyse ──
+
+// Check for duplicate behavior IDs
+const seenIds = new Map();
+const dupes = [];
+for (const row of dataRows) {
+  const bid = row[1].trim();
+  const prev = seenIds.get(bid);
+  if (prev) {
+    dupes.push({ id: bid, desc: row[2].trim(), prevDesc: prev.desc });
+  } else {
+    seenIds.set(bid, { desc: row[2].trim() });
+  }
+}
+if (dupes.length > 0) {
+  for (const d of dupes) {
+    console.log(`${YELLOW}⚠ 重复行为 ID: ${d.id} (${d.prevDesc} / ${d.desc})${RESET}`);
+  }
+}
+
 const untestedWarnings = [];
 const untestedExempted = [];
 let totalBehaviors = 0;
