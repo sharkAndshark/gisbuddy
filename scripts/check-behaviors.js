@@ -62,6 +62,9 @@ const header = allRows[headerIdx];
 const colTestId = header.findIndex(c => c.startsWith('测试编号'));
 const colReason = header.findIndex(c => c.startsWith('测试合理性'));
 const colExempt = header.findIndex(c => c.startsWith('解耦建议'));
+const colId = header.findIndex(c => c === '编号' || c.startsWith('编号'));
+const colDesc = header.findIndex(c => c === '可观测行为' || c.startsWith('可观测行为'));
+const colModule = header.findIndex(c => c === '模块' || c.startsWith('模块'));
 
 if (colTestId < 0 || colReason < 0 || colExempt < 0) {
   console.error('表格表头缺少必要列：测试编号 / 测试合理性 / 解耦建议/豁免');
@@ -73,55 +76,43 @@ function isHeaderRow(row) {
   return row.length > 0 && row[0] === '模块';
 }
 
+const maxCol = Math.max(colTestId, colReason, colExempt, colId, colDesc, colModule);
 const dataRows = [];
 for (let i = headerIdx + 1; i < allRows.length; i++) {
   const row = allRows[i];
   if (isHeaderRow(row)) continue;
-  if (row.length <= Math.max(colTestId, colReason, colExempt)) continue; // too short
+  if (row.length <= maxCol) continue; // too short
   // Only accept rows whose behavior ID matches B\d+ pattern
-  const bid = (row[1] || '').trim();
+  const bid = (row[colId] || '').trim();
   if (!/^B\d+$/.test(bid)) continue;
   dataRows.push(row);
 }
 
 // ── Analyse ──
 
-// Check for duplicate behavior IDs
-const seenIds = new Map();
-const dupes = [];
-for (const row of dataRows) {
-  const bid = row[1].trim();
-  const prev = seenIds.get(bid);
-  if (prev) {
-    dupes.push({ id: bid, desc: row[2].trim(), prevDesc: prev.desc });
-  } else {
-    seenIds.set(bid, { desc: row[2].trim() });
-  }
-}
-if (dupes.length > 0) {
-  for (const d of dupes) {
-    console.log(`${YELLOW}⚠ 重复行为 ID: ${d.id} (${d.prevDesc} / ${d.desc})${RESET}`);
-  }
-}
-
 const untestedWarnings = [];
 const untestedExempted = [];
 let totalBehaviors = 0;
 let totalUntested = 0;
 
-const countedIds = new Set();
+const seenIds = new Map(); // id → first row, for duplicate detection
 for (const row of dataRows) {
-  const behaviorId = row[1]?.trim() || '??';
-  // Skip duplicates (first occurrence wins, warning already printed above)
-  if (countedIds.has(behaviorId)) continue;
-  countedIds.add(behaviorId);
+  const behaviorId = (row[colId] || '').trim();
+
+  // Detect duplicates
+  const prev = seenIds.get(behaviorId);
+  if (prev) {
+    console.log(`${YELLOW}⚠ 重复行为 ID: ${behaviorId} (${prev.desc} / ${row[colDesc]?.trim()})${RESET}`);
+    continue; // skip duplicate, first occurrence wins
+  }
+  seenIds.set(behaviorId, { desc: row[colDesc]?.trim() || '' });
 
   totalBehaviors++;
   const testId = row[colTestId]?.trim() || '';
   const reasonStr = row[colReason]?.trim() || '0';
   const exemptStr = row[colExempt]?.trim() || '';
-  const moduleName = row[0]?.trim() || 'Unknown';
-  const behaviorDesc = row[2]?.trim() || '';
+  const moduleName = row[colModule]?.trim() || 'Unknown';
+  const behaviorDesc = row[colDesc]?.trim() || '';
 
   const reasonScore = parseInt(reasonStr, 10) || 0;
 
