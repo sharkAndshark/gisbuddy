@@ -29,7 +29,8 @@ class ConversationManager {
         const raw = fs.readFileSync(this.filePath, 'utf-8');
         this.conversations = JSON.parse(raw);
       }
-    } catch {
+    } catch (err) {
+      console.warn('[ConversationManager] failed to load conversations.json, starting fresh:', err);
       this.conversations = [];
     }
   }

@@ -489,6 +489,7 @@ async function loadFileContent(filePath) {
 let mapInstance = null;
 
 function renderFileInView(data) {
+  if (mapInstance) { mapInstance.remove(); mapInstance = null; }
   if (data.type === 'text') {
     UI.fileView.classList.remove('map-active');
     UI.fileView.innerHTML = '<pre>' + escHtml(data.content) + '</pre>';
@@ -496,7 +497,6 @@ function renderFileInView(data) {
     UI.fileView.classList.remove('map-active');
     UI.fileView.innerHTML = '<img src="' + data.content + '" alt="' + escAttr(data.name) + '">';
   } else if (data.type === 'geojson') {
-    if (mapInstance) { mapInstance.remove(); mapInstance = null; }
     UI.fileView.classList.add('map-active');
     UI.fileView.innerHTML = '<div id="map"></div>';
 
@@ -567,8 +567,8 @@ async function switchConversation(convId) {
     state.cleanupListener();
     state.cleanupListener = null;
   }
-  // ★ 通知主进程中止旧对话的后台处理
-  if (state.currentConvId) {
+  // ★ 通知主进程中止旧对话的后台处理（仅在有进行中的请求时）
+  if (state.currentConvId && state.isProcessing) {
     window.gisbuddy.cancelChat(state.currentConvId).catch(() => {});
   }
 

@@ -15,6 +15,11 @@ export function isCompatibleCRS(geojson: unknown): boolean {
   return code === 4326 || code === 3857;
 }
 
+// Returns the LAST AUTHORITY["EPSG","..."] match in the WKT.
+// This is correct for the common projected-CRS shape where the base
+// geographic CRS authority appears first and the projected authority
+// (the one we want) appears last. Compound CRS or unusual orderings
+// may resolve incorrectly, but only 4326/3857 are accepted downstream.
 export function extractEPSG(prjContent: string): number | null {
   const matches = prjContent.matchAll(/AUTHORITY\["EPSG","(\d+)"\]/g);
   let last: number | null = null;
