@@ -582,11 +582,45 @@ async function sendMessage() {
   }
 }
 
+let streamThinkingEl = null;
+let streamTextEl = null;
+
 function handleAgentEvent(event) {
   switch (event.type) {
     case 'status':
       break;
+    case 'thinking':
+      if (!streamThinkingEl) {
+        const el = document.createElement('div');
+        el.className = 'thinking-block';
+        el.innerHTML = '<div class="thinking-header">🧠 思考过程</div><div class="thinking-body"></div>';
+        const insertBefore = streamTextEl || UI.chatContainer.lastChild;
+        if (insertBefore && insertBefore !== UI.welcome) {
+          UI.chatContainer.insertBefore(el, insertBefore.nextSibling);
+        } else {
+          UI.chatContainer.appendChild(el);
+        }
+        streamThinkingEl = el.querySelector('.thinking-body');
+        scrollToBottom();
+      }
+      streamThinkingEl.textContent += event.data;
+      scrollToBottom();
+      break;
+    case 'text_delta':
+      if (!streamTextEl) {
+        const div = document.createElement('div');
+        div.className = 'message ai';
+        div.innerHTML = '<div class="bubble"></div>';
+        UI.chatContainer.appendChild(div);
+        streamTextEl = div.querySelector('.bubble');
+        scrollToBottom();
+      }
+      streamTextEl.textContent += event.data;
+      scrollToBottom();
+      break;
     case 'tool_start':
+      streamThinkingEl = null;
+      streamTextEl = null;
       addToolCall(event.data.name, event.data.args);
       break;
     case 'tool_result':
@@ -594,9 +628,13 @@ function handleAgentEvent(event) {
       refreshFileList();
       break;
     case 'text':
+      streamThinkingEl = null;
+      streamTextEl = null;
       addAiMessage(event.data);
       break;
     case 'error':
+      streamThinkingEl = null;
+      streamTextEl = null;
       addSystemMessage('错误: ' + event.data);
       break;
   }

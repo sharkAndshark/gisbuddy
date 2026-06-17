@@ -5,6 +5,8 @@ import * as path from 'path';
 
 export type AgentEvent =
   | { type: 'status'; data: string }
+  | { type: 'thinking'; data: string }
+  | { type: 'text_delta'; data: string }
   | { type: 'tool_start'; data: { name: string; args: Record<string, unknown> } }
   | { type: 'tool_result'; data: { name: string; success: boolean; output: string } }
   | { type: 'text'; data: string }
@@ -218,55 +220,99 @@ export class Agent {
 
     const maxIterations = 10;
     for (let i = 0; i < maxIterations; i++) {
-      onEvent({ type: 'status', data: i === 0 ? '思考中...' : '分析工具执行结果...' });
+      let fullContent = '';
+      let fullReasoning = '';
 
-      let response: OpenAI.Chat.ChatCompletion;
+      let stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
       try {
-        response = await this.client.chat.completions.create({
-          model: 'deepseek-chat',
+        const resp = await this.client.chat.completions.create({
+          model: 'deepseek-v4-pro',
           messages: apiMessages,
           tools: TOOL_DEFINITIONS,
           tool_choice: 'auto',
-        });
+          stream: true,
+          ...({ thinking: { type: 'enabled' } } as any),
+        }) as any;
+        stream = resp as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
       } catch (err: unknown) {
         const error = err as { message?: string };
         onEvent({ type: 'error', data: `调用 AI 服务失败: ${error.message || String(err)}` });
         return '';
       }
 
-      const choice = response.choices[0];
-      const msg = choice.message;
+      const toolCallAccum: Map<number, {
+        id: string;
+        index: number;
+        function: { name: string; arguments: string };
+      }> = new Map();
 
-      if (choice.finish_reason === 'tool_calls' && msg.tool_calls) {
+      let finishReason: string | null = null;
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta as any;
+        const reasoning = delta?.reasoning_content as string | undefined;
+
+        if (reasoning) {
+          fullReasoning += reasoning;
+          onEvent({ type: 'thinking', data: reasoning });
+        }
+
+        if (delta?.content) {
+          fullContent += delta.content;
+          onEvent({ type: 'text_delta', data: delta.content });
+        }
+
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index;
+            if (!toolCallAccum.has(idx)) {
+              toolCallAccum.set(idx, { id: '', index: idx, function: { name: '', arguments: '' } });
+            }
+            const acc = toolCallAccum.get(idx)!;
+            if (tc.id) acc.id = tc.id;
+            if (tc.function?.name) acc.function.name = tc.function.name;
+            if (tc.function?.arguments) acc.function.arguments += tc.function.arguments;
+          }
+        }
+
+        const finish = chunk.choices[0]?.finish_reason;
+        if (finish) {
+          finishReason = finish;
+        }
+      }
+
+      if (finishReason === 'tool_calls') {
+        const toolCalls = Array.from(toolCallAccum.values()).sort((a, b) => a.index - b.index);
+
         apiMessages.push({
-          role: 'assistant' as const,
-          content: null,
-          tool_calls: msg.tool_calls.map(tc => ({
+          role: 'assistant',
+          content: fullContent || null,
+          tool_calls: toolCalls.map(tc => ({
             id: tc.id,
             type: 'function' as const,
-            function: tc.function,
+            function: { name: tc.function.name, arguments: tc.function.arguments },
           })),
         });
 
-        for (const toolCall of msg.tool_calls) {
+        for (const tc of toolCalls) {
           let parsedArgs: Record<string, unknown>;
           try {
-            parsedArgs = JSON.parse(toolCall.function.arguments);
+            parsedArgs = JSON.parse(tc.function.arguments);
           } catch {
             parsedArgs = {};
           }
 
           onEvent({
             type: 'tool_start',
-            data: { name: toolCall.function.name, args: parsedArgs },
+            data: { name: tc.function.name, args: parsedArgs },
           });
 
-          const result = executeTool(toolCall.function.name, parsedArgs, cwd);
+          const result = executeTool(tc.function.name, parsedArgs, cwd);
 
           onEvent({
             type: 'tool_result',
             data: {
-              name: toolCall.function.name,
+              name: tc.function.name,
               success: result.success,
               output: result.success ? result.stdout : `错误: ${result.stderr}`,
             },
@@ -274,7 +320,7 @@ export class Agent {
 
           apiMessages.push({
             role: 'tool' as const,
-            tool_call_id: toolCall.id,
+            tool_call_id: tc.id,
             content: result.success
               ? result.stdout
               : `执行失败:\nSTDERR: ${result.stderr}\nSTDOUT: ${result.stdout}`,
@@ -284,15 +330,15 @@ export class Agent {
             role: 'assistant' as const,
             content: null,
             tool_calls: [{
-              id: toolCall.id,
+              id: tc.id,
               type: 'function' as const,
-              function: toolCall.function,
+              function: { name: tc.function.name, arguments: tc.function.arguments },
             }],
           });
 
           messages.push({
             role: 'tool' as const,
-            tool_call_id: toolCall.id,
+            tool_call_id: tc.id,
             content: result.success
               ? `工具执行成功:\n${result.stdout}`
               : `工具执行失败:\n${result.stderr}`,
@@ -301,10 +347,9 @@ export class Agent {
         continue;
       }
 
-      const content = msg.content || '';
-      messages.push({ role: 'assistant' as const, content });
-      onEvent({ type: 'text', data: content });
-      return content;
+      messages.push({ role: 'assistant' as const, content: fullContent });
+      onEvent({ type: 'text', data: fullContent });
+      return fullContent;
     }
 
     onEvent({ type: 'error', data: '工具调用次数过多，请简化指令或检查数据' });

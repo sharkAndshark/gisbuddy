@@ -787,6 +787,40 @@ body {
   padding: 4px 12px;
 }
 
+/* Thinking Block */
+.thinking-block {
+  align-self: flex-start;
+  width: 100%;
+  max-width: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  animation: msg-in 0.2s ease-out;
+}
+
+.thinking-header {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  user-select: none;
+}
+
+.thinking-body {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
 /* Tool Call */
 .tool-call {
   align-self: flex-start;
