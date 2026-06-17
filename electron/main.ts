@@ -370,7 +370,9 @@ ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: s
       controller.signal,
     );
   } finally {
-    abortControllers.delete(convId);
+    if (abortControllers.get(convId) === controller) {
+      abortControllers.delete(convId);
+    }
   }
 
   conversationManager.save();
@@ -391,6 +393,8 @@ ipcMain.handle('cancel-chat', (_event, convId: string) => {
   if (controller) {
     console.log('[cancel-chat] aborting conv:', convId);
     controller.abort();
-    abortControllers.delete(convId);
+    if (abortControllers.get(convId) === controller) {
+      abortControllers.delete(convId);
+    }
   }
 });

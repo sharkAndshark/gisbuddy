@@ -238,7 +238,7 @@ export class Agent {
           tool_choice: 'auto',
           stream: true,
           ...({ thinking: { type: 'enabled' } } as any),
-        }) as any;
+        }, signal ? { signal } : undefined) as any;
         stream = resp as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
       } catch (err: unknown) {
         if (signal?.aborted) {
@@ -260,6 +260,10 @@ export class Agent {
       let finishReason: string | null = null;
 
       for await (const chunk of stream) {
+        if (signal?.aborted) {
+          console.log('[agent] aborted mid-stream');
+          break;
+        }
         const delta = chunk.choices[0]?.delta as any;
         const reasoning = delta?.reasoning_content as string | undefined;
 
@@ -290,6 +294,11 @@ export class Agent {
         if (finish) {
           finishReason = finish;
         }
+      }
+
+      if (signal?.aborted) {
+        console.log('[agent] aborted after stream');
+        return '';
       }
 
       if (finishReason === 'tool_calls') {
