@@ -191,13 +191,23 @@ ipcMain.handle('get-conversations', () => {
 });
 
 ipcMain.handle('create-conversation', async () => {
-  if (!mainWindow) return null;
+  console.log('[IPC] create-conversation');
+  if (!mainWindow) {
+    console.warn('[IPC] create-conversation: mainWindow is null');
+    return null;
+  }
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
     message: '选择对话的工作文件夹',
   });
-  if (result.canceled || result.filePaths.length === 0) return null;
-  return conversationManager?.create(result.filePaths[0]) || null;
+  if (result.canceled || result.filePaths.length === 0) {
+    console.log('[IPC] create-conversation: cancelled');
+    return null;
+  }
+  console.log('[IPC] create-conversation: folder=', result.filePaths[0]);
+  const conv = conversationManager?.create(result.filePaths[0]) || null;
+  console.log('[IPC] create-conversation: created id=', conv?.id);
+  return conv;
 });
 
 ipcMain.handle('delete-conversation', (_event, id: string) => {

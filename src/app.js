@@ -23,7 +23,7 @@ const UI = {
   profileClose: document.getElementById('profile-close'),
   avatarPicker: document.getElementById('avatar-picker'),
   fileList: document.getElementById('file-list'),
-  fileRefreshBtn: document.getElementById('file-refresh-btn'),
+  fileRefreshBtn: null,
   tabBar: document.getElementById('tab-bar'),
   fileView: document.getElementById('file-view'),
   inputArea: document.querySelector('.input-area'),
@@ -164,11 +164,16 @@ UI.profileUsername.addEventListener('keydown', (e) => {
 });
 
 UI.newConvBtn.addEventListener('click', async () => {
-  const conv = await window.gisbuddy.createConversation();
-  if (!conv) return;
-  state.conversations.unshift({ id: conv.id, title: conv.title, folderPath: conv.folderPath });
-  renderConvList();
-  switchConversation(conv.id);
+  try {
+    const conv = await window.gisbuddy.createConversation();
+    if (!conv) return;
+    state.conversations.unshift({ id: conv.id, title: conv.title, folderPath: conv.folderPath });
+    renderConvList();
+    await switchConversation(conv.id);
+  } catch (e) {
+    console.error('创建对话失败:', e);
+    addSystemMessage('创建对话失败: ' + e.message);
+  }
 });
 
 
@@ -351,8 +356,6 @@ function pathDirname(p) {
   if (idx <= 0) return '/';
   return p.slice(0, idx);
 }
-
-UI.fileRefreshBtn.addEventListener('click', refreshFileList);
 
 /* === Tabs === */
 function initTabs() {
