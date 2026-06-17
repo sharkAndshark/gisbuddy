@@ -1,5 +1,4 @@
 const fs = require('fs');
-const path = require('path');
 
 // ── CLI args ──
 const args = process.argv.slice(2);
@@ -39,16 +38,7 @@ for (const line of lines) {
 // Find the first header row to determine column positions
 let headerIdx = -1;
 for (let i = 0; i < allRows.length; i++) {
-  const r = allRows[i];
-  if (r.some(c => c.includes('测试编号') && c.includes('测试合理性'))) {
-    // This is a row with combined header info (splitting issue), let me check differently
-    // Actually the header cells are separate: "测试编号" and "测试合理性(1-5)"
-    if (r.some(c => c.startsWith('测试编号') || c.startsWith('测试合理性'))) {
-      headerIdx = i;
-      break;
-    }
-  }
-  if (r.some(c => c === '测试编号' || c.startsWith('测试编号'))) {
+  if (allRows[i].some(c => c.startsWith('测试编号'))) {
     headerIdx = i;
     break;
   }
@@ -71,7 +61,7 @@ if (colTestId < 0 || colReason < 0 || colExempt < 0) {
 
 // Collect data rows (skip all header-like rows that appear in later tables)
 function isHeaderRow(row) {
-  return row.length > 0 && (row[0] === '模块' || row[0] === '模块' || row[0].includes('**'));
+  return row.length > 0 && row[0] === '模块';
 }
 
 const dataRows = [];
