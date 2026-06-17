@@ -1,5 +1,14 @@
 const fs = require('fs');
 
+// ── Terminal colors ──
+const RESET = '\x1b[0m';
+const RED = '\x1b[31m';
+const YELLOW = '\x1b[33m';
+const GREEN = '\x1b[32m';
+const CYAN = '\x1b[36m';
+const DIM = '\x1b[2m';
+const BOLD = '\x1b[1m';
+
 // ── CLI args ──
 const args = process.argv.slice(2);
 let filePath = null;
@@ -100,13 +109,18 @@ const untestedExempted = [];
 let totalBehaviors = 0;
 let totalUntested = 0;
 
+const countedIds = new Set();
 for (const row of dataRows) {
+  const behaviorId = row[1]?.trim() || '??';
+  // Skip duplicates (first occurrence wins, warning already printed above)
+  if (countedIds.has(behaviorId)) continue;
+  countedIds.add(behaviorId);
+
   totalBehaviors++;
   const testId = row[colTestId]?.trim() || '';
   const reasonStr = row[colReason]?.trim() || '0';
   const exemptStr = row[colExempt]?.trim() || '';
   const moduleName = row[0]?.trim() || 'Unknown';
-  const behaviorId = row[1]?.trim() || '??';
   const behaviorDesc = row[2]?.trim() || '';
 
   const reasonScore = parseInt(reasonStr, 10) || 0;
@@ -129,14 +143,6 @@ for (const row of dataRows) {
 const totalTested = totalBehaviors - totalUntested;
 
 // ── Output ──
-const RESET = '\x1b[0m';
-const RED = '\x1b[31m';
-const YELLOW = '\x1b[33m';
-const GREEN = '\x1b[32m';
-const CYAN = '\x1b[36m';
-const DIM = '\x1b[2m';
-const BOLD = '\x1b[1m';
-
 const label = mode === 'error' ? `${RED}❌ ERROR${RESET}` : `${YELLOW}⚠ WARN${RESET}`;
 
 console.log(`${CYAN}🔍 检查 behaviors.md — 未测行为审计${RESET}\n`);
