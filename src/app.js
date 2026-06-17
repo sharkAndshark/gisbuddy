@@ -596,14 +596,9 @@ function handleAgentEvent(event) {
       if (!streamThinkingEl) {
         const el = document.createElement('div');
         el.className = 'thinking-block';
-        el.innerHTML = '<div class="thinking-header">🧠 思考过程</div><div class="thinking-body"></div>';
-        const insertBefore = streamTextEl || UI.chatContainer.lastChild;
-        if (insertBefore && insertBefore !== UI.welcome) {
-          UI.chatContainer.insertBefore(el, insertBefore.nextSibling);
-        } else {
-          UI.chatContainer.appendChild(el);
-        }
-        streamThinkingEl = el.querySelector('.thinking-body');
+        el.innerHTML = '<div class="thinking-content"></div>';
+        UI.chatContainer.appendChild(el);
+        streamThinkingEl = el.querySelector('.thinking-content');
         scrollToBottom();
       }
       streamThinkingEl.textContent += event.data;
