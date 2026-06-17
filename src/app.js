@@ -670,6 +670,8 @@ async function sendMessage() {
       } else {
         addSystemMessage('错误: ' + err.message);
       }
+    } else {
+      console.warn('[sendMessage] error on abandoned conv:', myConvId, err);
     }
   } finally {
     if (state.currentConvId === myConvId) {
