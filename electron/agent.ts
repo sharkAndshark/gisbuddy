@@ -284,7 +284,7 @@ export class Agent {
       if (finishReason === 'tool_calls') {
         const toolCalls = Array.from(toolCallAccum.values()).sort((a, b) => a.index - b.index);
 
-        apiMessages.push({
+        const apiAssistantMsg: any = {
           role: 'assistant',
           content: fullContent || null,
           tool_calls: toolCalls.map(tc => ({
@@ -292,8 +292,11 @@ export class Agent {
             type: 'function' as const,
             function: { name: tc.function.name, arguments: tc.function.arguments },
           })),
-        });
+        };
+        if (fullReasoning) apiAssistantMsg.reasoning_content = fullReasoning;
+        apiMessages.push(apiAssistantMsg);
 
+        let reasoningSaved = false;
         for (const tc of toolCalls) {
           let parsedArgs: Record<string, unknown>;
           try {
@@ -326,15 +329,20 @@ export class Agent {
               : `执行失败:\nSTDERR: ${result.stderr}\nSTDOUT: ${result.stdout}`,
           });
 
-          messages.push({
-            role: 'assistant' as const,
+          const displayMsg: any = {
+            role: 'assistant',
             content: null,
             tool_calls: [{
               id: tc.id,
               type: 'function' as const,
               function: { name: tc.function.name, arguments: tc.function.arguments },
             }],
-          });
+          };
+          if (!reasoningSaved && fullReasoning) {
+            displayMsg.reasoning_content = fullReasoning;
+            reasoningSaved = true;
+          }
+          messages.push(displayMsg);
 
           messages.push({
             role: 'tool' as const,
@@ -347,7 +355,9 @@ export class Agent {
         continue;
       }
 
-      messages.push({ role: 'assistant' as const, content: fullContent });
+      const msg: any = { role: 'assistant', content: fullContent };
+      if (fullReasoning) msg.reasoning_content = fullReasoning;
+      messages.push(msg);
       onEvent({ type: 'text', data: fullContent });
       return fullContent;
     }

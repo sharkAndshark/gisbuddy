@@ -538,8 +538,13 @@ async function switchConversation(convId) {
     for (const msg of messages) {
       if (msg.role === 'user') {
         addUserMessage(msg.content);
-      } else if (msg.role === 'assistant' && typeof msg.content === 'string') {
-        addAiMessage(msg.content);
+      } else if (msg.role === 'assistant') {
+        if (msg.reasoning_content) {
+          addThinkingBlock(msg.reasoning_content);
+        }
+        if (typeof msg.content === 'string') {
+          addAiMessage(msg.content);
+        }
       }
     }
   }
@@ -739,6 +744,14 @@ function updateToolResult(name, success, output) {
 
     scrollToBottom();
   }
+}
+
+function addThinkingBlock(content) {
+  const el = document.createElement('div');
+  el.className = 'thinking-block';
+  el.innerHTML = '<div class="thinking-content">' + escHtml(content) + '</div>';
+  UI.chatContainer.appendChild(el);
+  scrollToBottom();
 }
 
 function addUserMessage(text) {
