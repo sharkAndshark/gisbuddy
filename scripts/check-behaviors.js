@@ -88,7 +88,7 @@ for (let i = headerIdx + 1; i < allRows.length; i++) {
   dataRows.push(row);
 }
 
-// ── Analyse ──
+// ── Analyze ──
 
 const untestedWarnings = [];
 const untestedExempted = [];
