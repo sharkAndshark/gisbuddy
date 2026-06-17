@@ -1,5 +1,42 @@
+/* global marked:readonly, L:readonly */
 const DEFAULT_AVATAR = '🌍';
 const AVATARS = ['🌍','🌎','🌏','🗺️','🏔️','🏖️','🏙️','🌄','🌅','🗾','🏝️','🌋','🏞️','🌲','🌸','🦅','🐉','🐼','🦊','🐬'];
+
+const C = {
+  MESSAGE: 'message',
+  USER: 'user',
+  AI: 'ai',
+  SYSTEM: 'system',
+  BUBBLE: 'bubble',
+  THINKING_BLOCK: 'thinking-block',
+  THINKING_CONTENT: 'thinking-content',
+  TOOL_CALL: 'tool-call',
+  TOOL_CALL_HEADER: 'tool-call-header',
+  TOOL_CALL_ICON: 'tool-call-icon',
+  TOOL_CALL_NAME: 'tool-call-name',
+  TOOL_CALL_SUMMARY: 'tool-call-summary',
+  TOOL_CALL_STATUS: 'tool-call-status',
+  TOOL_CALL_TOGGLE: 'tool-call-toggle',
+  TOOL_CALL_BODY: 'tool-call-body',
+  TOOL_CALL_COMMAND: 'tool-call-command',
+  TOOL_CALL_OUTPUT: 'tool-call-output',
+  TOOL_CALL_ERROR: 'tool-call-output tool-call-error',
+  SUCCESS: ' success',
+  ERROR: ' error',
+  HIDDEN: 'hidden',
+};
+
+const MAX_FILE_CACHE = 20;
+
+const ERROR_PREFIXES = {
+  LIVE: '错误:',
+  HISTORY: '工具执行失败',
+};
+
+function isToolErrorOutput(output, success) {
+  if (success) return false;
+  return output.startsWith(ERROR_PREFIXES.LIVE) || output.startsWith(ERROR_PREFIXES.HISTORY);
+}
 
 const UI = {
   app: document.getElementById('app'),
@@ -23,7 +60,6 @@ const UI = {
   profileClose: document.getElementById('profile-close'),
   avatarPicker: document.getElementById('avatar-picker'),
   fileList: document.getElementById('file-list'),
-  fileRefreshBtn: null,
   tabBar: document.getElementById('tab-bar'),
   fileView: document.getElementById('file-view'),
   inputArea: document.querySelector('.input-area'),
@@ -276,6 +312,10 @@ function renderConvList() {
 
 function showNoConversation() {
   switchTab('chat');
+  state.tabs = [{ id: 'chat', label: '💬 对话', closable: false }];
+  state.activeTabId = 'chat';
+  renderTabs();
+  if (mapInstance) { mapInstance.remove(); mapInstance = null; }
   UI.welcome.style.display = '';
   while (UI.chatContainer.children.length > 1) {
     const last = UI.chatContainer.lastElementChild;
@@ -399,9 +439,10 @@ function switchTab(tabId) {
 }
 
 function showChatView() {
-  UI.chatContainer.classList.remove('hidden');
-  UI.fileView.classList.add('hidden');
-  UI.inputArea.classList.remove('hidden');
+  if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+  UI.chatContainer.classList.remove(C.HIDDEN);
+  UI.fileView.classList.add(C.HIDDEN);
+  UI.inputArea.classList.remove(C.HIDDEN);
   if (!state.currentConvId) {
     UI.input.disabled = true;
     UI.input.placeholder = '选择一个对话后开始...';
@@ -429,6 +470,10 @@ function showFileView(filePath) {
 async function loadFileContent(filePath) {
   try {
     const result = await window.gisbuddy.readFile(filePath);
+    const keys = Object.keys(state.fileContents);
+    if (keys.length >= MAX_FILE_CACHE) {
+      delete state.fileContents[keys[0]];
+    }
     state.fileContents[filePath] = result;
     if (state.activeTabId === filePath) {
       renderFileInView(result);
@@ -443,6 +488,7 @@ async function loadFileContent(filePath) {
 let mapInstance = null;
 
 function renderFileInView(data) {
+  if (mapInstance) { mapInstance.remove(); mapInstance = null; }
   if (data.type === 'text') {
     UI.fileView.classList.remove('map-active');
     UI.fileView.innerHTML = '<pre>' + escHtml(data.content) + '</pre>';
@@ -450,7 +496,6 @@ function renderFileInView(data) {
     UI.fileView.classList.remove('map-active');
     UI.fileView.innerHTML = '<img src="' + data.content + '" alt="' + escAttr(data.name) + '">';
   } else if (data.type === 'geojson') {
-    if (mapInstance) { mapInstance.remove(); mapInstance = null; }
     UI.fileView.classList.add('map-active');
     UI.fileView.innerHTML = '<div id="map"></div>';
 
@@ -504,6 +549,7 @@ function closeTab(tabId) {
   if (tabId === 'chat') return;
   state.tabs = state.tabs.filter(t => t.id !== tabId);
   delete state.fileContents[tabId];
+  if (mapInstance && state.activeTabId === tabId) { mapInstance.remove(); mapInstance = null; }
   if (state.activeTabId === tabId) {
     switchTab('chat');
   } else {
@@ -512,6 +558,27 @@ function closeTab(tabId) {
 }
 
 async function switchConversation(convId) {
+  console.log('[switchConversation] switching from', state.currentConvId, 'to', convId);
+
+  // ★ 停止旧对话的 IPC 事件监听，防止交叉污染
+  if (state.cleanupListener) {
+    console.log('[switchConversation] removing old agent listener');
+    state.cleanupListener();
+    state.cleanupListener = null;
+  }
+  // ★ 通知主进程中止旧对话的后台处理（仅在有进行中的请求时）
+  if (state.currentConvId && state.isProcessing) {
+    window.gisbuddy.cancelChat(state.currentConvId).catch(() => {});
+  }
+
+  // ★ 重置流式渲染状态
+  streamThinkingEl = null;
+  streamTextEl = null;
+  currentToolEl = null;
+
+  // ★ 标记不再处理中（旧对话的 sendMessage 在 finally 也会重置，但先做更安全）
+  state.isProcessing = false;
+
   state.currentConvId = convId;
 
   switchTab('chat');
@@ -535,7 +602,8 @@ async function switchConversation(convId) {
   const messages = await window.gisbuddy.getMessages(convId);
   if (messages.length > 0) {
     UI.welcome.style.display = 'none';
-    for (const msg of messages) {
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
       if (msg.role === 'user') {
         addUserMessage(msg.content);
       } else if (msg.role === 'assistant') {
@@ -544,6 +612,18 @@ async function switchConversation(convId) {
         }
         if (typeof msg.content === 'string') {
           addAiMessage(msg.content);
+        }
+        if (msg.tool_calls && msg.tool_calls.length > 0) {
+          for (const tc of msg.tool_calls) {
+            let args = {};
+            try { args = JSON.parse(tc.function.arguments || '{}'); } catch { /* ignore parse errors */ }
+            const toolMsg = messages[i + 1];
+            const hasResult = toolMsg?.role === 'tool' && toolMsg.tool_call_id === tc.id;
+            const success = hasResult && !toolMsg.content?.startsWith('工具执行失败');
+            const output = hasResult ? toolMsg.content : '';
+            addToolCall(tc.function.name, args, { success, output });
+            if (hasResult) i++;
+          }
         }
       }
     }
@@ -555,6 +635,9 @@ async function switchConversation(convId) {
 async function sendMessage() {
   const text = UI.input.value.trim();
   if (!text || state.isProcessing || !state.currentConvId) return;
+
+  const myConvId = state.currentConvId;
+  console.log('[sendMessage] conv=' + myConvId + ' text=' + text.slice(0, 50));
 
   UI.input.value = '';
   UI.sendBtn.disabled = true;
@@ -568,25 +651,33 @@ async function sendMessage() {
     if (state.cleanupListener) state.cleanupListener();
     state.cleanupListener = window.gisbuddy.onAgentEvent(handleAgentEvent);
 
-    const result = await window.gisbuddy.chat(state.currentConvId, text);
+    const result = await window.gisbuddy.chat(myConvId, text);
 
-    if (result.updatedTitle !== undefined) {
-      const conv = state.conversations.find(c => c.id === state.currentConvId);
+    console.log('[sendMessage] chat finished, updatedTitle:', result?.updatedTitle);
+
+    if (result.updatedTitle !== undefined && state.currentConvId === myConvId) {
+      const conv = state.conversations.find(c => c.id === myConvId);
       if (conv && conv.title !== result.updatedTitle) {
         conv.title = result.updatedTitle;
         renderConvList();
       }
     }
   } catch (err) {
-    if (err.message && err.message.includes('API Key')) {
-      addSystemMessage('请先在左下角 ⚙️ 设置中配置 DeepSeek API Key');
-      showSettings();
+    if (state.currentConvId === myConvId) {
+      if (err.message && err.message.includes('API Key')) {
+        addSystemMessage('请先在左下角 ⚙️ 设置中配置 DeepSeek API Key');
+        showSettings();
+      } else {
+        addSystemMessage('错误: ' + err.message);
+      }
     } else {
-      addSystemMessage('错误: ' + err.message);
+      console.warn('[sendMessage] error on abandoned conv:', myConvId, err);
     }
   } finally {
-    state.isProcessing = false;
-    UI.sendBtn.disabled = !UI.input.value.trim();
+    if (state.currentConvId === myConvId) {
+      state.isProcessing = false;
+      UI.sendBtn.disabled = !UI.input.value.trim();
+    }
   }
 }
 
@@ -594,16 +685,27 @@ let streamThinkingEl = null;
 let streamTextEl = null;
 
 function handleAgentEvent(event) {
+  // ★ 守卫：不在处理状态时忽略所有事件（已切换对话或对话已结束）
+  if (!state.isProcessing) {
+    console.log('[agent-event] IGNORED (not processing):', event.type);
+    return;
+  }
+
+  console.log('[agent-event]', event.type,
+    event.data?.name || (typeof event.data === 'string' && event.data.length > 50
+      ? event.data.slice(0, 50) + '...'
+      : event.data));
+
   switch (event.type) {
     case 'status':
       break;
     case 'thinking':
       if (!streamThinkingEl) {
         const el = document.createElement('div');
-        el.className = 'thinking-block';
-        el.innerHTML = '<div class="thinking-content"></div>';
+        el.className = C.THINKING_BLOCK;
+        el.innerHTML = '<div class="' + C.THINKING_CONTENT + '"></div>';
         UI.chatContainer.appendChild(el);
-        streamThinkingEl = el.querySelector('.thinking-content');
+        streamThinkingEl = el.querySelector('.' + C.THINKING_CONTENT);
         scrollToBottom();
       }
       streamThinkingEl.textContent += event.data;
@@ -612,25 +714,28 @@ function handleAgentEvent(event) {
     case 'text_delta':
       if (!streamTextEl) {
         const div = document.createElement('div');
-        div.className = 'message ai';
-        div.innerHTML = '<div class="bubble"></div>';
+        div.className = C.MESSAGE + ' ' + C.AI;
+        div.innerHTML = '<div class="' + C.BUBBLE + '"></div>';
         UI.chatContainer.appendChild(div);
-        streamTextEl = div.querySelector('.bubble');
+        streamTextEl = div.querySelector('.' + C.BUBBLE);
         scrollToBottom();
       }
       streamTextEl.textContent += event.data;
       scrollToBottom();
       break;
     case 'tool_start':
+      console.log('[agent-event] tool_start:', event.data.name);
       streamThinkingEl = null;
       streamTextEl = null;
       addToolCall(event.data.name, event.data.args);
       break;
     case 'tool_result':
+      console.log('[agent-event] tool_result:', event.data.name, event.data.success);
       updateToolResult(event.data.name, event.data.success, event.data.output);
       refreshFileList();
       break;
     case 'text':
+      console.log('[agent-event] text completed, length:', event.data.length);
       if (streamTextEl) {
         let rendered;
         try {
@@ -655,38 +760,41 @@ function handleAgentEvent(event) {
 
 let currentToolEl = null;
 
-function addToolCall(name, args) {
+function addToolCall(name, args, result = null) {
   const card = document.createElement('div');
-  card.className = 'tool-call';
+  card.className = C.TOOL_CALL + (result ? (result.success ? C.SUCCESS : C.ERROR) : '');
   card.dataset.toolName = name;
 
   const header = document.createElement('div');
-  header.className = 'tool-call-header';
+  header.className = C.TOOL_CALL_HEADER;
 
   const icon = document.createElement('span');
-  icon.className = 'tool-call-icon';
+  icon.className = C.TOOL_CALL_ICON;
   icon.textContent = '🔧';
 
   const nameEl = document.createElement('span');
-  nameEl.className = 'tool-call-name';
+  nameEl.className = C.TOOL_CALL_NAME;
   nameEl.textContent = name;
 
   const summary = document.createElement('span');
-  summary.className = 'tool-call-summary';
+  summary.className = C.TOOL_CALL_SUMMARY;
   if (name === 'bash' && args.command) {
     summary.textContent = args.command;
   } else if (args && args.path) {
     summary.textContent = args.path;
-  } else if (args && args.content) {
-    const s = args.content;
+  } else if (args && (args.content || Object.keys(args).length > 0)) {
+    const s = args.content || JSON.stringify(args);
     summary.textContent = s.length > 60 ? s.slice(0, 60) + '...' : s;
   }
 
   const status = document.createElement('span');
-  status.className = 'tool-call-status';
+  status.className = C.TOOL_CALL_STATUS;
+  if (result) {
+    status.textContent = result.success ? '✓' : '✗';
+  }
 
   const toggle = document.createElement('span');
-  toggle.className = 'tool-call-toggle';
+  toggle.className = C.TOOL_CALL_TOGGLE;
   toggle.textContent = '▶';
 
   header.appendChild(icon);
@@ -696,10 +804,10 @@ function addToolCall(name, args) {
   header.appendChild(toggle);
 
   const body = document.createElement('div');
-  body.className = 'tool-call-body hidden';
+  body.className = C.TOOL_CALL_BODY + ' ' + C.HIDDEN;
 
   const cmdLine = document.createElement('div');
-  cmdLine.className = 'tool-call-command';
+  cmdLine.className = C.TOOL_CALL_COMMAND;
   if (name === 'bash' && args.command) {
     cmdLine.textContent = '$ ' + args.command;
   } else {
@@ -707,12 +815,18 @@ function addToolCall(name, args) {
   }
   body.appendChild(cmdLine);
 
-  const output = document.createElement('div');
-  output.className = 'tool-call-output';
-  body.appendChild(output);
+  const outputEl = document.createElement('div');
+  outputEl.className = C.TOOL_CALL_OUTPUT;
+  if (result && result.output) {
+    outputEl.textContent = result.output;
+    if (isToolErrorOutput(result.output, result.success)) {
+      outputEl.className = C.TOOL_CALL_ERROR;
+    }
+  }
+  body.appendChild(outputEl);
 
   header.addEventListener('click', () => {
-    const hidden = body.classList.toggle('hidden');
+    const hidden = body.classList.toggle(C.HIDDEN);
     toggle.textContent = hidden ? '▶' : '▼';
   });
 
@@ -720,26 +834,23 @@ function addToolCall(name, args) {
   card.appendChild(body);
   UI.chatContainer.appendChild(card);
   scrollToBottom();
-  currentToolEl = card;
+
+  if (!result) {
+    currentToolEl = card;
+  }
 }
 
 function updateToolResult(name, success, output) {
   if (currentToolEl && currentToolEl.dataset.toolName === name) {
-    currentToolEl.className = 'tool-call' + (success ? ' success' : ' error');
+    currentToolEl.className = C.TOOL_CALL + (success ? C.SUCCESS : C.ERROR);
 
-    const statusEl = currentToolEl.querySelector('.tool-call-status');
+    const statusEl = currentToolEl.querySelector('.' + C.TOOL_CALL_STATUS);
     statusEl.textContent = success ? '✓' : '✗';
 
-    const outputEl = currentToolEl.querySelector('.tool-call-output');
+    const outputEl = currentToolEl.querySelector('.' + C.TOOL_CALL_OUTPUT);
     if (output) {
-      const isError = !success && output.startsWith('错误:');
-      if (isError) {
-        outputEl.className = 'tool-call-output tool-call-error';
-        outputEl.textContent = output;
-      } else {
-        outputEl.className = 'tool-call-output';
-        outputEl.textContent = output;
-      }
+      outputEl.className = isToolErrorOutput(output, success) ? C.TOOL_CALL_ERROR : C.TOOL_CALL_OUTPUT;
+      outputEl.textContent = output;
     }
 
     scrollToBottom();
@@ -748,23 +859,23 @@ function updateToolResult(name, success, output) {
 
 function addThinkingBlock(content) {
   const el = document.createElement('div');
-  el.className = 'thinking-block';
-  el.innerHTML = '<div class="thinking-content">' + escHtml(content) + '</div>';
+  el.className = C.THINKING_BLOCK;
+  el.innerHTML = '<div class="' + C.THINKING_CONTENT + '">' + escHtml(content) + '</div>';
   UI.chatContainer.appendChild(el);
   scrollToBottom();
 }
 
 function addUserMessage(text) {
   const div = document.createElement('div');
-  div.className = 'message user';
-  div.innerHTML = '<div class="bubble">' + escHtml(text) + '</div>';
+  div.className = C.MESSAGE + ' ' + C.USER;
+  div.innerHTML = '<div class="' + C.BUBBLE + '">' + escHtml(text) + '</div>';
   UI.chatContainer.appendChild(div);
   scrollToBottom();
 }
 
 function addAiMessage(html) {
   const div = document.createElement('div');
-  div.className = 'message ai';
+  div.className = C.MESSAGE + ' ' + C.AI;
 
   let rendered;
   try {
@@ -773,22 +884,26 @@ function addAiMessage(html) {
     rendered = escHtml(html).replace(/\n/g, '<br>');
   }
 
-  div.innerHTML = '<div class="bubble">' + rendered + '</div>';
+  div.innerHTML = '<div class="' + C.BUBBLE + '">' + rendered + '</div>';
   UI.chatContainer.appendChild(div);
   scrollToBottom();
 }
 
 function addSystemMessage(text) {
   const div = document.createElement('div');
-  div.className = 'message system';
-  div.innerHTML = '<div class="bubble">' + escHtml(text) + '</div>';
+  div.className = C.MESSAGE + ' ' + C.SYSTEM;
+  div.innerHTML = '<div class="' + C.BUBBLE + '">' + escHtml(text) + '</div>';
   UI.chatContainer.appendChild(div);
   scrollToBottom();
 }
 
+let scrollPending = false;
 function scrollToBottom() {
+  if (scrollPending) return;
+  scrollPending = true;
   requestAnimationFrame(() => {
     UI.chatContainer.scrollTop = UI.chatContainer.scrollHeight;
+    scrollPending = false;
   });
 }
 

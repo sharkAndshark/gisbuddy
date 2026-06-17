@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'el
 import * as path from 'path';
 import * as fs from 'fs';
 import { Agent, AgentEvent } from './agent';
+import { isCompatibleCRS, extractEPSG } from './utils';
 import { read as readShapefile } from 'shapefile';
 
 interface Conversation {
@@ -28,7 +29,8 @@ class ConversationManager {
         const raw = fs.readFileSync(this.filePath, 'utf-8');
         this.conversations = JSON.parse(raw);
       }
-    } catch {
+    } catch (err) {
+      console.warn('[ConversationManager] failed to load conversations.json, starting fresh:', err);
       this.conversations = [];
     }
   }
@@ -85,6 +87,7 @@ let tray: Tray | null = null;
 let agent: Agent | null = null;
 let conversationManager: ConversationManager | null = null;
 let isQuitting = false;
+const abortControllers = new Map<string, AbortController>();
 
 function getIconPath(name: string): string | undefined {
   const devPath = path.join(__dirname, '../../build/', name);
@@ -223,24 +226,7 @@ ipcMain.handle('get-messages', (_event, id: string) => {
 });
 
 const TEXT_EXTS = new Set(['.json','.xml','.csv','.txt','.md','.yml','.yaml','.js','.py','.sh','.env','.gitignore','.log','.html','.css','.ts','.jsx','.tsx','.toml','.cfg','.conf','.ini','.sql','.glsl','.r','.m']);
-
-function isCompatibleCRS(geojson: any): boolean {
-  if (!geojson || typeof geojson !== 'object') return false;
-  const crs = geojson.crs;
-  if (!crs) return true; // RFC 7946: no crs → WGS84
-  const name = crs?.properties?.name;
-  if (!name || typeof name !== 'string') return true;
-  const m = name.match(/(\d+)/);
-  if (!m) return false;
-  const code = parseInt(m[1], 10);
-  return code === 4326 || code === 3857;
-}
 const IMAGE_EXTS = new Set(['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp']);
-
-function extractEPSG(prjContent: string): number | null {
-  const m = prjContent.match(/AUTHORITY\["EPSG","(\d+)"\]/);
-  return m ? parseInt(m[1], 10) : null;
-}
 
 ipcMain.handle('read-file', async (_event, filePath: string) => {
   try {
@@ -266,7 +252,7 @@ ipcMain.handle('read-file', async (_event, filePath: string) => {
         if (isCompatibleCRS(parsed)) {
           return { type: 'geojson', content: parsed, name: path.basename(filePath) };
         }
-      } catch {}
+      } catch { console.warn('[read-file] GeoJSON CRS parse failed:', filePath); }
       try {
         return { type: 'text', content: JSON.stringify(JSON.parse(raw), null, 2), name: path.basename(filePath) };
       } catch {
@@ -289,7 +275,7 @@ ipcMain.handle('read-file', async (_event, filePath: string) => {
             crsCompatible = false;
           }
         }
-      } catch {}
+      } catch { console.warn('[read-file] .prj read failed:', filePath); }
       if (!crsCompatible) {
         return { type: 'error', message: 'Shapefile 坐标系非 4326/3857，无法叠加地图预览' };
       }
@@ -311,7 +297,7 @@ ipcMain.handle('read-file', async (_event, filePath: string) => {
       }
       let content = fs.readFileSync(filePath, 'utf-8');
       if (ext === '.json') {
-        try { content = JSON.stringify(JSON.parse(content), null, 2); } catch {}
+        try { content = JSON.stringify(JSON.parse(content), null, 2); } catch { /* not valid JSON, return raw */ }
       }
       return { type: 'text', content, name: path.basename(filePath) };
     }
@@ -350,23 +336,45 @@ ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: s
   const conv = conversationManager.get(convId);
   if (!conv) throw new Error('对话不存在');
 
+  // 中止同一对话正在进行中的请求
+  const existing = abortControllers.get(convId);
+  if (existing) {
+    console.log('[chat] aborting previous request for conv:', convId);
+    existing.abort();
+  }
+  const controller = new AbortController();
+  abortControllers.set(convId, controller);
+
   conv.messages.push({ role: 'user', content: text });
   conv.updatedAt = Date.now();
 
   let finalReply = '';
 
-  await agent.chat(
-    conv.messages as Parameters<typeof agent.chat>[0],
-    conv.folderPath,
-    (eventData: AgentEvent) => {
+  const safeSend = (eventData: AgentEvent) => {
+    try {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('agent-event', eventData);
       }
-      if (eventData.type === 'text') {
-        finalReply = eventData.data;
-      }
-    },
-  );
+    } catch { console.warn('[safeSend] failed to send event, window likely destroyed'); }
+  };
+
+  try {
+    await agent.chat(
+      conv.messages as Parameters<typeof agent.chat>[0],
+      conv.folderPath,
+      (eventData: AgentEvent) => {
+        safeSend(eventData);
+        if (eventData.type === 'text') {
+          finalReply = eventData.data;
+        }
+      },
+      controller.signal,
+    );
+  } finally {
+    if (abortControllers.get(convId) === controller) {
+      abortControllers.delete(convId);
+    }
+  }
 
   conversationManager.save();
 
@@ -379,4 +387,15 @@ ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: s
   }
 
   return { reply: finalReply, updatedTitle: conv.title };
+});
+
+ipcMain.handle('cancel-chat', (_event, convId: string) => {
+  const controller = abortControllers.get(convId);
+  if (controller) {
+    console.log('[cancel-chat] aborting conv:', convId);
+    controller.abort();
+    if (abortControllers.get(convId) === controller) {
+      abortControllers.delete(convId);
+    }
+  }
 });

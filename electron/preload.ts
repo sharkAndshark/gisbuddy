@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('gisbuddy', {
 
   chat: (convId: string, text: string) => ipcRenderer.invoke('chat', { convId, text }),
 
+  cancelChat: (convId: string) => ipcRenderer.invoke('cancel-chat', convId),
+
   listDirectory: (dirPath: string) => ipcRenderer.invoke('list-directory', dirPath),
 
   readFile: (filePath: string) => ipcRenderer.invoke('read-file', filePath),

@@ -9,7 +9,12 @@
     "start": "npm run build && electron .",
     "dev": "npm run build && electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "husky"
   },
   "dependencies": {
     "fast-xml-parser": "^5.9.0",
@@ -17,11 +22,16 @@
     "shapefile": "^0.6.6"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^20.0.0",
     "electron": "^30.0.0",
     "electron-builder": "^24.0.0",
+    "eslint": "^10.5.0",
+    "husky": "^9.1.7",
     "sharp": "^0.35.1",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.61.1",
+    "vitest": "^4.1.9"
   },
   "build": {
     "appId": "com.gisbuddy.app",
