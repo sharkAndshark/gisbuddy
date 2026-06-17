@@ -29,6 +29,16 @@ const C = {
 
 const MAX_FILE_CACHE = 20;
 
+const ERROR_PREFIXES = {
+  LIVE: '错误:',
+  HISTORY: '工具执行失败',
+};
+
+function isToolErrorOutput(output, success) {
+  if (success) return false;
+  return output.startsWith(ERROR_PREFIXES.LIVE) || output.startsWith(ERROR_PREFIXES.HISTORY);
+}
+
 const UI = {
   app: document.getElementById('app'),
   convList: document.getElementById('conv-list'),
@@ -627,7 +637,8 @@ async function sendMessage() {
   const text = UI.input.value.trim();
   if (!text || state.isProcessing || !state.currentConvId) return;
 
-  console.log('[sendMessage] conv=' + state.currentConvId + ' text=' + text.slice(0, 50));
+  const myConvId = state.currentConvId;
+  console.log('[sendMessage] conv=' + myConvId + ' text=' + text.slice(0, 50));
 
   UI.input.value = '';
   UI.sendBtn.disabled = true;
@@ -641,27 +652,31 @@ async function sendMessage() {
     if (state.cleanupListener) state.cleanupListener();
     state.cleanupListener = window.gisbuddy.onAgentEvent(handleAgentEvent);
 
-    const result = await window.gisbuddy.chat(state.currentConvId, text);
+    const result = await window.gisbuddy.chat(myConvId, text);
 
     console.log('[sendMessage] chat finished, updatedTitle:', result?.updatedTitle);
 
-    if (result.updatedTitle !== undefined) {
-      const conv = state.conversations.find(c => c.id === state.currentConvId);
+    if (result.updatedTitle !== undefined && state.currentConvId === myConvId) {
+      const conv = state.conversations.find(c => c.id === myConvId);
       if (conv && conv.title !== result.updatedTitle) {
         conv.title = result.updatedTitle;
         renderConvList();
       }
     }
   } catch (err) {
-    if (err.message && err.message.includes('API Key')) {
-      addSystemMessage('请先在左下角 ⚙️ 设置中配置 DeepSeek API Key');
-      showSettings();
-    } else {
-      addSystemMessage('错误: ' + err.message);
+    if (state.currentConvId === myConvId) {
+      if (err.message && err.message.includes('API Key')) {
+        addSystemMessage('请先在左下角 ⚙️ 设置中配置 DeepSeek API Key');
+        showSettings();
+      } else {
+        addSystemMessage('错误: ' + err.message);
+      }
     }
   } finally {
-    state.isProcessing = false;
-    UI.sendBtn.disabled = !UI.input.value.trim();
+    if (state.currentConvId === myConvId) {
+      state.isProcessing = false;
+      UI.sendBtn.disabled = !UI.input.value.trim();
+    }
   }
 }
 
@@ -803,7 +818,7 @@ function addToolCall(name, args, result = null) {
   outputEl.className = C.TOOL_CALL_OUTPUT;
   if (result && result.output) {
     outputEl.textContent = result.output;
-    if (!result.success && result.output.startsWith('工具执行失败')) {
+    if (isToolErrorOutput(result.output, result.success)) {
       outputEl.className = C.TOOL_CALL_ERROR;
     }
   }
@@ -833,8 +848,7 @@ function updateToolResult(name, success, output) {
 
     const outputEl = currentToolEl.querySelector('.' + C.TOOL_CALL_OUTPUT);
     if (output) {
-      const isError = !success && output.startsWith('错误:');
-      outputEl.className = isError ? C.TOOL_CALL_ERROR : C.TOOL_CALL_OUTPUT;
+      outputEl.className = isToolErrorOutput(output, success) ? C.TOOL_CALL_ERROR : C.TOOL_CALL_OUTPUT;
       outputEl.textContent = output;
     }
 
