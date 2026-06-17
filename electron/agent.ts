@@ -212,6 +212,7 @@ export class Agent {
     messages: OpenAI.Chat.ChatCompletionMessageParam[],
     cwd: string,
     onEvent: EventCallback,
+    signal?: AbortSignal,
   ): Promise<string> {
     const apiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: SYSTEM_PROMPT },
@@ -220,6 +221,11 @@ export class Agent {
 
     const maxIterations = 10;
     for (let i = 0; i < maxIterations; i++) {
+      if (signal?.aborted) {
+        console.log('[agent] aborted at iteration', i);
+        return '';
+      }
+
       let fullContent = '';
       let fullReasoning = '';
 
@@ -235,7 +241,12 @@ export class Agent {
         }) as any;
         stream = resp as AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
       } catch (err: unknown) {
+        if (signal?.aborted) {
+          console.log('[agent] aborted during API call');
+          return '';
+        }
         const error = err as { message?: string };
+        console.error('[agent] API error:', error.message || String(err));
         onEvent({ type: 'error', data: `调用 AI 服务失败: ${error.message || String(err)}` });
         return '';
       }
@@ -283,6 +294,8 @@ export class Agent {
 
       if (finishReason === 'tool_calls') {
         const toolCalls = Array.from(toolCallAccum.values()).sort((a, b) => a.index - b.index);
+        console.log('[agent] iteration', i, ': tool_calls count=', toolCalls.length,
+          toolCalls.map(tc => tc.function.name).join(','));
 
         const apiAssistantMsg: any = {
           role: 'assistant',
@@ -311,6 +324,7 @@ export class Agent {
           });
 
           const result = executeTool(tc.function.name, parsedArgs, cwd);
+          console.log('[agent] tool', tc.function.name, '→', result.success ? 'OK' : 'FAIL');
 
           onEvent({
             type: 'tool_result',
@@ -355,6 +369,8 @@ export class Agent {
         continue;
       }
 
+      console.log('[agent] iteration', i, ': final answer, content length=', fullContent.length,
+        'reasoning length=', fullReasoning.length);
       const msg: any = { role: 'assistant', content: fullContent };
       if (fullReasoning) msg.reasoning_content = fullReasoning;
       messages.push(msg);
@@ -362,6 +378,7 @@ export class Agent {
       return fullContent;
     }
 
+    console.warn('[agent] max iterations reached');
     onEvent({ type: 'error', data: '工具调用次数过多，请简化指令或检查数据' });
     return '';
   }
