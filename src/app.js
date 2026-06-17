@@ -70,6 +70,7 @@ let selectedAvatar = DEFAULT_AVATAR;
 
 let state = {
   conversations: [],
+  projects: [],
   currentConvId: null,
   isProcessing: false,
   cleanupListener: null,
@@ -78,6 +79,8 @@ let state = {
   activeTabId: null,
   fileContents: {},
 };
+
+let expandedProjects = JSON.parse(localStorage.getItem('gisbuddy_expanded_projects') || '{}');
 
 function autoResize(el) {
   el.style.height = 'auto';
@@ -199,18 +202,7 @@ UI.profileUsername.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') UI.profileSave.click();
 });
 
-UI.newConvBtn.addEventListener('click', async () => {
-  try {
-    const conv = await window.gisbuddy.createConversation();
-    if (!conv) return;
-    state.conversations.unshift({ id: conv.id, title: conv.title, folderPath: conv.folderPath });
-    renderConvList();
-    await switchConversation(conv.id);
-  } catch (e) {
-    console.error('创建对话失败:', e);
-    addSystemMessage('创建对话失败: ' + e.message);
-  }
-});
+UI.newConvBtn.addEventListener('click', createProject);
 
 
 document.querySelectorAll('.suggestion').forEach((btn) => {
@@ -224,6 +216,7 @@ document.querySelectorAll('.suggestion').forEach((btn) => {
 });
 
 async function loadConversations() {
+  state.projects = await window.gisbuddy.getProjects();
   state.conversations = await window.gisbuddy.getConversations();
   renderConvList();
 
@@ -235,79 +228,376 @@ async function loadConversations() {
 function renderConvList() {
   UI.convList.innerHTML = '';
 
-  if (state.conversations.length === 0) {
+  const convsByProject = {};
+  for (const conv of state.conversations) {
+    const pid = conv.projectId;
+    if (!convsByProject[pid]) convsByProject[pid] = [];
+    convsByProject[pid].push(conv);
+  }
+
+  const activeProjects = state.projects.filter(p => !p.archived);
+  const archivedProjects = state.projects.filter(p => p.archived);
+
+  if (state.projects.length === 0 && state.conversations.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'conv-empty';
-    empty.textContent = '暂无对话';
+    empty.textContent = '暂无项目，请点击 [+项目] 创建';
     UI.convList.appendChild(empty);
     return;
   }
 
-  for (const conv of state.conversations) {
-    const item = document.createElement('div');
-    item.className = 'conv-item' + (conv.id === state.currentConvId ? ' active' : '');
-    item.dataset.convId = conv.id;
+  for (const project of activeProjects) {
+    const isExpanded = expandedProjects[project.id] !== false;
+    const convs = convsByProject[project.id] || [];
 
-    const infoDiv = document.createElement('div');
-    infoDiv.className = 'conv-item-info';
+    // ── Project header ──
+    const header = document.createElement('div');
+    header.className = 'project-header';
+    header.dataset.projectId = project.id;
 
-    const titleSpan = document.createElement('div');
-    titleSpan.className = 'conv-item-title';
-    titleSpan.textContent = conv.title;
+    const toggle = document.createElement('span');
+    toggle.className = 'project-toggle';
+    toggle.textContent = isExpanded ? '▼' : '▶';
 
-    const folderSpan = document.createElement('div');
-    folderSpan.className = 'conv-item-folder';
-    folderSpan.textContent = '📁 ' + conv.folderPath;
+    const title = document.createElement('span');
+    title.className = 'project-title';
+    title.textContent = project.title;
 
-    infoDiv.appendChild(titleSpan);
-    infoDiv.appendChild(folderSpan);
+    const folder = document.createElement('span');
+    folder.className = 'project-folder';
+    const fname = getFolderBasename(project.folderPath);
+    folder.textContent = fname ? '📁 ' + fname : '';
+    folder.title = project.folderPath || '';
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'conv-del-btn';
-    deleteBtn.textContent = '×';
-    deleteBtn.title = '删除对话';
-    deleteBtn.addEventListener('click', async (e) => {
+    const info = document.createElement('div');
+    info.className = 'project-info';
+    info.appendChild(title);
+    info.appendChild(folder);
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'project-add-btn';
+    addBtn.textContent = '+';
+    addBtn.title = '在此项目下新建对话';
+    addBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!confirm('确定删除对话 "' + conv.title + '"？（不会删除文件夹内容）')) return;
-      await window.gisbuddy.deleteConversation(conv.id);
-      state.conversations = state.conversations.filter(c => c.id !== conv.id);
-      if (state.currentConvId === conv.id) {
-        state.currentConvId = null;
-        if (state.conversations.length > 0) {
-          switchConversation(state.conversations[0].id);
+      await createConvInProject(project.id);
+    });
+
+    header.appendChild(toggle);
+    header.appendChild(info);
+    header.appendChild(addBtn);
+
+    header.addEventListener('click', () => toggleProject(project.id));
+    header.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      renameProjectInline(header, project);
+    });
+    header.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showProjectContextMenu(e.clientX, e.clientY, project);
+    });
+
+    UI.convList.appendChild(header);
+
+    // ── Conversations ──
+    if (isExpanded) {
+      for (const conv of convs) {
+        renderConvItem(conv);
+      }
+    }
+  }
+
+  // ── Archived projects section ──
+  if (archivedProjects.length > 0) {
+    const archiveHeader = document.createElement('div');
+    archiveHeader.className = 'archive-header';
+    archiveHeader.textContent = '▶ 已归档 (' + archivedProjects.length + ')';
+    let archivedExpanded = false;
+    archiveHeader.addEventListener('click', () => {
+      archivedExpanded = !archivedExpanded;
+      const section = document.getElementById('archived-section');
+      if (section) {
+        if (archivedExpanded) {
+          section.classList.remove('hidden');
+          archiveHeader.textContent = '▼ 已归档 (' + archivedProjects.length + ')';
         } else {
-          showNoConversation();
+          section.classList.add('hidden');
+          archiveHeader.textContent = '▶ 已归档 (' + archivedProjects.length + ')';
         }
       }
-      renderConvList();
     });
+    UI.convList.appendChild(archiveHeader);
 
-    item.appendChild(infoDiv);
-    item.appendChild(deleteBtn);
-    item.addEventListener('click', () => switchConversation(conv.id));
+    const archiveSection = document.createElement('div');
+    archiveSection.id = 'archived-section';
+    archiveSection.className = 'archived-section hidden';
 
-    item.addEventListener('dblclick', () => {
-      const input = document.createElement('input');
-      input.className = 'conv-rename-input';
-      input.value = conv.title;
-      input.addEventListener('blur', async () => {
-        const newTitle = input.value.trim() || conv.title;
-        await window.gisbuddy.renameConversation(conv.id, newTitle);
-        conv.title = newTitle;
+    for (const project of archivedProjects) {
+      const convs = convsByProject[project.id] || [];
+      const projExpanded = expandedProjects['archived_' + project.id] !== false;
+
+      const header = document.createElement('div');
+      header.className = 'project-header archived';
+      header.dataset.projectId = project.id;
+
+      const toggle = document.createElement('span');
+      toggle.className = 'project-toggle';
+      toggle.textContent = projExpanded ? '▼' : '▶';
+
+      const title = document.createElement('span');
+      title.className = 'project-title';
+      title.textContent = project.title;
+
+      const folder = document.createElement('span');
+      folder.className = 'project-folder';
+      const fname2 = getFolderBasename(project.folderPath);
+      folder.textContent = fname2 ? '📁 ' + fname2 : '';
+      folder.title = project.folderPath || '';
+
+      const info2 = document.createElement('div');
+      info2.className = 'project-info';
+      info2.appendChild(title);
+      info2.appendChild(folder);
+
+      header.appendChild(toggle);
+      header.appendChild(info2);
+
+      header.addEventListener('click', () => {
+        const key = 'archived_' + project.id;
+        expandedProjects[key] = expandedProjects[key] !== false ? false : true;
+        saveExpandedProjects();
         renderConvList();
       });
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') input.blur();
-        if (e.key === 'Escape') { input.value = conv.title; input.blur(); }
+      header.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showProjectContextMenu(e.clientX, e.clientY, project);
       });
-      titleSpan.textContent = '';
-      titleSpan.appendChild(input);
-      input.focus();
-      input.select();
-    });
 
-    UI.convList.appendChild(item);
+      archiveSection.appendChild(header);
+
+      if (projExpanded) {
+        for (const conv of convs) {
+          renderConvItem(conv);
+        }
+      }
+    }
+
+    UI.convList.appendChild(archiveSection);
   }
+}
+
+function renderConvItem(conv) {
+  const item = document.createElement('div');
+  item.className = 'conv-item' + (conv.id === state.currentConvId ? ' active' : '');
+  item.dataset.convId = conv.id;
+
+  const infoDiv = document.createElement('div');
+  infoDiv.className = 'conv-item-info';
+
+  const titleSpan = document.createElement('div');
+  titleSpan.className = 'conv-item-title';
+  titleSpan.textContent = conv.title;
+
+  infoDiv.appendChild(titleSpan);
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'conv-del-btn';
+  deleteBtn.textContent = '×';
+  deleteBtn.title = '删除对话';
+  deleteBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!confirm('确定删除对话 "' + conv.title + '"？（不会删除文件夹内容）')) return;
+    await window.gisbuddy.deleteConversation(conv.id);
+    state.conversations = state.conversations.filter(c => c.id !== conv.id);
+    if (state.currentConvId === conv.id) {
+      state.currentConvId = null;
+      if (state.conversations.length > 0) {
+        switchConversation(state.conversations[0].id);
+      } else {
+        showNoConversation();
+      }
+    }
+    renderConvList();
+  });
+
+  item.appendChild(infoDiv);
+  item.appendChild(deleteBtn);
+  item.addEventListener('click', () => switchConversation(conv.id));
+
+  item.addEventListener('dblclick', () => {
+    const input = document.createElement('input');
+    input.className = 'conv-rename-input';
+    input.value = conv.title;
+    input.addEventListener('blur', async () => {
+      const newTitle = input.value.trim() || conv.title;
+      await window.gisbuddy.renameConversation(conv.id, newTitle);
+      conv.title = newTitle;
+      renderConvList();
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') { input.value = conv.title; input.blur(); }
+    });
+    titleSpan.textContent = '';
+    titleSpan.appendChild(input);
+    input.focus();
+    input.select();
+  });
+
+  // Context menu for conversation
+  item.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showConvContextMenu(e.clientX, e.clientY, conv);
+  });
+
+  UI.convList.appendChild(item);
+  return item;
+}
+
+async function createProject() {
+  const project = await window.gisbuddy.createProject();
+  if (!project) return;
+  state.projects.push(project);
+  expandedProjects[project.id] = true;
+  saveExpandedProjects();
+  renderConvList();
+}
+
+function toggleProject(projectId) {
+  expandedProjects[projectId] = expandedProjects[projectId] !== false ? false : true;
+  saveExpandedProjects();
+  renderConvList();
+}
+
+function saveExpandedProjects() {
+  localStorage.setItem('gisbuddy_expanded_projects', JSON.stringify(expandedProjects));
+}
+
+async function createConvInProject(projectId) {
+  try {
+    const conv = await window.gisbuddy.createConversation(projectId);
+    if (!conv) return;
+    state.conversations.unshift({ id: conv.id, title: conv.title, projectId: conv.projectId });
+    expandedProjects[projectId] = true;
+    saveExpandedProjects();
+    renderConvList();
+    await switchConversation(conv.id);
+  } catch (e) {
+    console.error('创建对话失败:', e);
+    addSystemMessage('创建对话失败: ' + e.message);
+  }
+}
+
+function renameProjectInline(headerEl, project) {
+  const titleEl = headerEl.querySelector('.project-title');
+  if (!titleEl) return;
+  const oldTitle = project.title;
+  const input = document.createElement('input');
+  input.className = 'conv-rename-input';
+  input.value = oldTitle;
+  titleEl.textContent = '';
+  titleEl.appendChild(input);
+  input.focus();
+  input.select();
+  input.addEventListener('blur', async () => {
+    const newTitle = input.value.trim() || oldTitle;
+    project.title = newTitle;
+    await window.gisbuddy.renameProject(project.id, newTitle);
+    renderConvList();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') { project.title = oldTitle; renderConvList(); }
+  });
+}
+
+function showProjectContextMenu(x, y, project) {
+  removeContextMenu();
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.id = 'ctx-menu';
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+
+  if (project.archived) {
+    addCtxItem(menu, '恢复项目', () => unarchiveProject(project.id));
+  } else {
+    addCtxItem(menu, '归档项目', () => archiveProject(project.id));
+    addCtxItem(menu, '重命名', () => {
+      const header = document.querySelector('.project-header[data-project-id="' + project.id + '"]');
+      if (header) renameProjectInline(header, project);
+    });
+  }
+
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', removeContextMenu, { once: true }), 0);
+}
+
+function showConvContextMenu(x, y, conv) {
+  removeContextMenu();
+  const menu = document.createElement('div');
+  menu.className = 'context-menu';
+  menu.id = 'ctx-menu';
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+
+  const projects = state.projects.filter(p => p.id !== conv.projectId);
+  if (projects.length > 0) {
+    const subLabel = document.createElement('div');
+    subLabel.className = 'ctx-item ctx-label';
+    subLabel.textContent = '移动到...';
+    menu.appendChild(subLabel);
+    for (const p of projects) {
+      addCtxItem(menu, '  ' + p.title, () => moveConversationTo(conv.id, p.id));
+    }
+  }
+
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', removeContextMenu, { once: true }), 0);
+}
+
+function addCtxItem(menu, label, onClick) {
+  const item = document.createElement('div');
+  item.className = 'ctx-item';
+  item.textContent = label;
+  item.addEventListener('click', (e) => {
+    e.stopPropagation();
+    removeContextMenu();
+    onClick();
+  });
+  menu.appendChild(item);
+}
+
+function removeContextMenu() {
+  const existing = document.getElementById('ctx-menu');
+  if (existing) existing.remove();
+}
+
+async function moveConversationTo(convId, projectId) {
+  await window.gisbuddy.moveConversation(convId, projectId);
+  const conv = state.conversations.find(c => c.id === convId);
+  if (conv) conv.projectId = projectId;
+  renderConvList();
+}
+
+async function archiveProject(projectId) {
+  if (!confirm('确定归档此项目？对话不会被删除。')) return;
+  await window.gisbuddy.archiveProject(projectId);
+  const project = state.projects.find(p => p.id === projectId);
+  if (project) project.archived = true;
+  renderConvList();
+}
+
+async function unarchiveProject(projectId) {
+  await window.gisbuddy.unarchiveProject(projectId);
+  const project = state.projects.find(p => p.id === projectId);
+  if (project) project.archived = false;
+  expandedProjects[projectId] = true;
+  saveExpandedProjects();
+  renderConvList();
 }
 
 function showNoConversation() {
@@ -343,10 +633,19 @@ function escAttr(s) {
   return s.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function getFolderBasename(p) {
+  if (!p) return '';
+  return p.replace(/\\/g, '/').split('/').filter(Boolean).pop() || '';
+}
+
 async function refreshFileList() {
   const conv = state.conversations.find(c => c.id === state.currentConvId);
   if (!conv) { UI.fileList.innerHTML = ''; return; }
-  if (!state.currentDir) state.currentDir = conv.folderPath;
+  if (!state.currentDir) {
+    const project = state.projects.find(p => p.id === conv.projectId);
+    if (project) state.currentDir = project.folderPath;
+  }
+  if (!state.currentDir) { UI.fileList.innerHTML = ''; return; }
   try {
     const entries = await window.gisbuddy.listDirectory(state.currentDir);
     renderFileList(entries);
@@ -356,7 +655,9 @@ async function refreshFileList() {
 }
 
 function renderFileList(entries) {
-  const rootDir = state.conversations.find(c => c.id === state.currentConvId)?.folderPath;
+  const conv = state.conversations.find(c => c.id === state.currentConvId);
+  const project = conv ? state.projects.find(p => p.id === conv.projectId) : null;
+  const rootDir = project?.folderPath;
   const isRoot = state.currentDir === rootDir;
 
   let html = '';
@@ -595,8 +896,11 @@ async function switchConversation(convId) {
 
   const conv = state.conversations.find(c => c.id === convId);
   if (conv) {
-    state.currentDir = conv.folderPath;
-    refreshFileList();
+    const project = state.projects.find(p => p.id === conv.projectId);
+    if (project) {
+      state.currentDir = project.folderPath;
+      refreshFileList();
+    }
   }
 
   const messages = await window.gisbuddy.getMessages(convId);
@@ -654,6 +958,9 @@ async function sendMessage() {
     const result = await window.gisbuddy.chat(myConvId, text);
 
     console.log('[sendMessage] chat finished, updatedTitle:', result?.updatedTitle);
+
+    // 同步项目状态（发消息可能触发自动取消归档）
+    state.projects = await window.gisbuddy.getProjects();
 
     if (result.updatedTitle !== undefined && state.currentConvId === myConvId) {
       const conv = state.conversations.find(c => c.id === myConvId);

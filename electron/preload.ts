@@ -5,13 +5,25 @@ contextBridge.exposeInMainWorld('gisbuddy', {
 
   getConversations: () => ipcRenderer.invoke('get-conversations'),
 
-  createConversation: () => ipcRenderer.invoke('create-conversation'),
+  createConversation: (projectId: string) => ipcRenderer.invoke('create-conversation', projectId),
 
   deleteConversation: (id: string) => ipcRenderer.invoke('delete-conversation', id),
 
   renameConversation: (id: string, title: string) => ipcRenderer.invoke('rename-conversation', id, title),
 
   getMessages: (id: string) => ipcRenderer.invoke('get-messages', id),
+
+  getProjects: () => ipcRenderer.invoke('get-projects'),
+
+  createProject: () => ipcRenderer.invoke('create-project'),
+
+  renameProject: (id: string, title: string) => ipcRenderer.invoke('rename-project', id, title),
+
+  archiveProject: (id: string) => ipcRenderer.invoke('archive-project', id),
+
+  unarchiveProject: (id: string) => ipcRenderer.invoke('unarchive-project', id),
+
+  moveConversation: (convId: string, projectId: string) => ipcRenderer.invoke('move-conversation', convId, projectId),
 
   chat: (convId: string, text: string) => ipcRenderer.invoke('chat', { convId, text }),
 

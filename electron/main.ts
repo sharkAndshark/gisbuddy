@@ -4,83 +4,7 @@ import * as fs from 'fs';
 import { Agent, AgentEvent } from './agent';
 import { isCompatibleCRS, extractEPSG } from './utils';
 import { read as readShapefile } from 'shapefile';
-
-interface Conversation {
-  id: string;
-  title: string;
-  folderPath: string;
-  createdAt: number;
-  updatedAt: number;
-  messages: unknown[];
-}
-
-class ConversationManager {
-  private conversations: Conversation[] = [];
-  private filePath: string;
-
-  constructor() {
-    this.filePath = path.join(app.getPath('userData'), 'conversations.json');
-    this.load();
-  }
-
-  private load() {
-    try {
-      if (fs.existsSync(this.filePath)) {
-        const raw = fs.readFileSync(this.filePath, 'utf-8');
-        this.conversations = JSON.parse(raw);
-      }
-    } catch (err) {
-      console.warn('[ConversationManager] failed to load conversations.json, starting fresh:', err);
-      this.conversations = [];
-    }
-  }
-
-  save() {
-    const dir = path.dirname(this.filePath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(this.filePath, JSON.stringify(this.conversations, null, 2));
-  }
-
-  getAll() {
-    return this.conversations.map(({ messages: _m, ...rest }) => rest);
-  }
-
-  get(id: string): Conversation | undefined {
-    return this.conversations.find(c => c.id === id);
-  }
-
-  create(folderPath: string): Conversation {
-    const conv: Conversation = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      title: path.basename(folderPath),
-      folderPath,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      messages: [],
-    };
-    this.conversations.unshift(conv);
-    this.save();
-    return conv;
-  }
-
-  delete(id: string) {
-    this.conversations = this.conversations.filter(c => c.id !== id);
-    this.save();
-  }
-
-  rename(id: string, title: string) {
-    const conv = this.get(id);
-    if (conv) {
-      conv.title = title;
-      conv.updatedAt = Date.now();
-      this.save();
-    }
-  }
-
-  getMessages(id: string): unknown[] {
-    return this.get(id)?.messages || [];
-  }
-}
+import { ConversationManager } from './conversation-manager';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -168,7 +92,10 @@ function createWindow() {
   createTray();
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  conversationManager = new ConversationManager(path.join(app.getPath('userData'), 'conversations.json'));
+  createWindow();
+});
 
 app.on('before-quit', () => {
   isQuitting = true;
@@ -185,30 +112,18 @@ app.on('activate', () => {
 
 ipcMain.handle('configure', async (_event, apiKey: string) => {
   agent = new Agent(apiKey);
-  conversationManager = new ConversationManager();
   return { success: true };
 });
+
+// ── Conversation IPC ──
 
 ipcMain.handle('get-conversations', () => {
   return conversationManager?.getAll() || [];
 });
 
-ipcMain.handle('create-conversation', async () => {
-  console.log('[IPC] create-conversation');
-  if (!mainWindow) {
-    console.warn('[IPC] create-conversation: mainWindow is null');
-    return null;
-  }
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openDirectory'],
-    message: '选择对话的工作文件夹',
-  });
-  if (result.canceled || result.filePaths.length === 0) {
-    console.log('[IPC] create-conversation: cancelled');
-    return null;
-  }
-  console.log('[IPC] create-conversation: folder=', result.filePaths[0]);
-  const conv = conversationManager?.create(result.filePaths[0]) || null;
+ipcMain.handle('create-conversation', async (_event, projectId: string) => {
+  console.log('[IPC] create-conversation projectId=', projectId);
+  const conv = conversationManager?.create(projectId) || null;
   console.log('[IPC] create-conversation: created id=', conv?.id);
   return conv;
 });
@@ -219,6 +134,46 @@ ipcMain.handle('delete-conversation', (_event, id: string) => {
 
 ipcMain.handle('rename-conversation', (_event, id: string, title: string) => {
   conversationManager?.rename(id, title);
+});
+
+// ── Project IPC ──
+
+ipcMain.handle('get-projects', () => {
+  return conversationManager?.getProjects() || [];
+});
+
+ipcMain.handle('create-project', async () => {
+  console.log('[IPC] create-project');
+  if (!mainWindow) {
+    console.warn('[IPC] create-project: mainWindow is null');
+    return null;
+  }
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    message: '选择项目的工作文件夹',
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    console.log('[IPC] create-project: cancelled');
+    return null;
+  }
+  console.log('[IPC] create-project: folder=', result.filePaths[0]);
+  return conversationManager?.createProject(result.filePaths[0]) || null;
+});
+
+ipcMain.handle('rename-project', (_event, id: string, title: string) => {
+  conversationManager?.renameProject(id, title);
+});
+
+ipcMain.handle('archive-project', (_event, id: string) => {
+  conversationManager?.archiveProject(id);
+});
+
+ipcMain.handle('unarchive-project', (_event, id: string) => {
+  conversationManager?.unarchiveProject(id);
+});
+
+ipcMain.handle('move-conversation', (_event, convId: string, projectId: string) => {
+  conversationManager?.moveConversation(convId, projectId);
 });
 
 ipcMain.handle('get-messages', (_event, id: string) => {
@@ -336,6 +291,14 @@ ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: s
   const conv = conversationManager.get(convId);
   if (!conv) throw new Error('对话不存在');
 
+  const project = conversationManager.getProject(conv.projectId);
+  if (!project) throw new Error('对话所属项目不存在');
+
+  // 自动取消归档：如果对话所属项目已归档，发消息时自动恢复
+  if (project.archived) {
+    conversationManager.unarchiveProject(project.id);
+  }
+
   // 中止同一对话正在进行中的请求
   const existing = abortControllers.get(convId);
   if (existing) {
@@ -361,7 +324,7 @@ ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: s
   try {
     await agent.chat(
       conv.messages as Parameters<typeof agent.chat>[0],
-      conv.folderPath,
+      project.folderPath,
       (eventData: AgentEvent) => {
         safeSend(eventData);
         if (eventData.type === 'text') {
@@ -378,7 +341,7 @@ ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: s
 
   conversationManager.save();
 
-  if (conv.title === path.basename(conv.folderPath) && finalReply) {
+  if (conv.title === '新对话' && finalReply) {
     const firstWords = text.slice(0, 30).replace(/\s+/g, ' ').trim();
     if (firstWords) {
       conv.title = firstWords + (text.length > 30 ? '...' : '');
