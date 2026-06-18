@@ -1,6 +1,6 @@
-const fs = require('fs');
-const path = require('path');
-const { XMLParser } = require('fast-xml-parser');
+import fs from 'fs';
+import path from 'path';
+import { XMLParser } from 'fast-xml-parser';
 
 const input = process.argv[2] || 'test-data/sample.osm';
 const outputDir = path.dirname(input);

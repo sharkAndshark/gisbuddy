@@ -912,25 +912,27 @@ async function switchConversation(convId) {
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];
       if (msg.role === 'user') {
-        addUserMessage(msg.content);
+        addUserMessage(getTextContent(msg));
       } else if (msg.role === 'assistant') {
-        if (msg.reasoning_content) {
-          addThinkingBlock(msg.reasoning_content);
-        }
-        if (typeof msg.content === 'string') {
-          addAiMessage(msg.content);
-        }
-        if (msg.tool_calls && msg.tool_calls.length > 0) {
-          for (const tc of msg.tool_calls) {
-            let args = {};
-            try { args = JSON.parse(tc.function.arguments || '{}'); } catch { /* ignore parse errors */ }
-            const toolMsg = messages[i + 1];
-            const hasResult = toolMsg?.role === 'tool' && toolMsg.tool_call_id === tc.id;
-            const success = hasResult && !toolMsg.content?.startsWith('工具执行失败');
-            const output = hasResult ? toolMsg.content : '';
-            addToolCall(tc.function.name, args, { success, output });
-            if (hasResult) i++;
+        if (Array.isArray(msg.content)) {
+          for (const block of msg.content) {
+            if (block.type === 'thinking' && block.thinking) {
+              addThinkingBlock(block.thinking);
+            } else if (block.type === 'text' && block.text) {
+              addAiMessage(block.text);
+            } else if (block.type === 'toolCall') {
+              let args = {};
+              try { args = JSON.parse(block.function?.arguments || '{}'); } catch { /* ignore */ }
+              const nextMsg = messages[i + 1];
+              const hasResult = nextMsg?.role === 'toolResult' && nextMsg.toolCallId === block.id;
+              const isError = hasResult ? !!nextMsg.isError : false;
+              const output = hasResult ? getTextContent(nextMsg) : '';
+              addToolCall(block.function?.name || 'unknown', args, { success: !isError, output });
+              if (hasResult) i++;
+            }
           }
+        } else if (typeof msg.content === 'string') {
+          addAiMessage(msg.content);
         }
       }
     }
@@ -994,76 +996,112 @@ async function sendMessage() {
 let streamThinkingEl = null;
 let streamTextEl = null;
 
+function getTextContent(msg) {
+  if (typeof msg.content === 'string') return msg.content;
+  if (Array.isArray(msg.content)) {
+    return msg.content
+      .filter(c => c.type === 'text')
+      .map(c => c.text)
+      .join('');
+  }
+  return String(msg.content || '');
+}
+
 function handleAgentEvent(event) {
-  // ★ 守卫：不在处理状态时忽略所有事件（已切换对话或对话已结束）
   if (!state.isProcessing) {
     console.log('[agent-event] IGNORED (not processing):', event.type);
     return;
   }
 
   console.log('[agent-event]', event.type,
-    event.data?.name || (typeof event.data === 'string' && event.data.length > 50
-      ? event.data.slice(0, 50) + '...'
-      : event.data));
+    event.toolName || (event.assistantMessageEvent?.delta?.length > 50
+      ? event.assistantMessageEvent.delta.slice(0, 50) + '...'
+      : ''));
 
   switch (event.type) {
-    case 'status':
+    case 'message_start':
+      if (event.message?.role === 'assistant') {
+        streamThinkingEl = null;
+        streamTextEl = null;
+      }
       break;
-    case 'thinking':
-      if (!streamThinkingEl) {
-        const el = document.createElement('div');
-        el.className = C.THINKING_BLOCK;
-        el.innerHTML = '<div class="' + C.THINKING_CONTENT + '"></div>';
-        UI.chatContainer.appendChild(el);
-        streamThinkingEl = el.querySelector('.' + C.THINKING_CONTENT);
+
+    case 'message_update': {
+      const ame = event.assistantMessageEvent;
+      if (!ame) break;
+
+      if (ame.type === 'thinking_delta') {
+        if (!streamThinkingEl) {
+          const el = document.createElement('div');
+          el.className = C.THINKING_BLOCK;
+          el.innerHTML = '<div class="' + C.THINKING_CONTENT + '"></div>';
+          UI.chatContainer.appendChild(el);
+          streamThinkingEl = el.querySelector('.' + C.THINKING_CONTENT);
+          scrollToBottom();
+        }
+        streamThinkingEl.textContent += ame.delta;
+        scrollToBottom();
+      } else if (ame.type === 'text_delta') {
+        if (!streamTextEl) {
+          const div = document.createElement('div');
+          div.className = C.MESSAGE + ' ' + C.AI;
+          div.innerHTML = '<div class="' + C.BUBBLE + '"></div>';
+          UI.chatContainer.appendChild(div);
+          streamTextEl = div.querySelector('.' + C.BUBBLE);
+          scrollToBottom();
+        }
+        streamTextEl.textContent += ame.delta;
         scrollToBottom();
       }
-      streamThinkingEl.textContent += event.data;
-      scrollToBottom();
       break;
-    case 'text_delta':
-      if (!streamTextEl) {
-        const div = document.createElement('div');
-        div.className = C.MESSAGE + ' ' + C.AI;
-        div.innerHTML = '<div class="' + C.BUBBLE + '"></div>';
-        UI.chatContainer.appendChild(div);
-        streamTextEl = div.querySelector('.' + C.BUBBLE);
-        scrollToBottom();
+    }
+
+    case 'message_end':
+      if (event.message?.role === 'assistant') {
+        if (streamTextEl) {
+          const text = streamTextEl.textContent || getTextContent(event.message);
+          let rendered;
+          try {
+            rendered = marked.parse(text, { breaks: true });
+          } catch {
+            rendered = escHtml(text).replace(/\n/g, '<br>');
+          }
+          streamTextEl.innerHTML = rendered;
+        } else if (!streamTextEl) {
+          const text = getTextContent(event.message);
+          if (text) {
+            addAiMessage(text);
+          }
+        }
+        if (event.message.errorMessage) {
+          addSystemMessage('错误: ' + event.message.errorMessage);
+        }
       }
-      streamTextEl.textContent += event.data;
-      scrollToBottom();
-      break;
-    case 'tool_start':
-      console.log('[agent-event] tool_start:', event.data.name);
       streamThinkingEl = null;
       streamTextEl = null;
-      addToolCall(event.data.name, event.data.args);
       break;
-    case 'tool_result':
-      console.log('[agent-event] tool_result:', event.data.name, event.data.success);
-      updateToolResult(event.data.name, event.data.success, event.data.output);
+
+    case 'tool_execution_start':
+      console.log('[agent-event] tool_execution_start:', event.toolName);
+      streamThinkingEl = null;
+      streamTextEl = null;
+      addToolCall(event.toolName, event.args);
+      break;
+
+    case 'tool_execution_end':
+      console.log('[agent-event] tool_execution_end:', event.toolName, !event.isError);
+      updateToolResult(event.toolName, event.isError, getTextContent({ content: event.result?.content }));
       refreshFileList();
       break;
-    case 'text':
-      console.log('[agent-event] text completed, length:', event.data.length);
-      if (streamTextEl) {
-        let rendered;
-        try {
-          rendered = marked.parse(event.data, { breaks: true });
-        } catch {
-          rendered = escHtml(event.data).replace(/\n/g, '<br>');
-        }
-        streamTextEl.innerHTML = rendered;
-      } else {
-        addAiMessage(event.data);
-      }
+
+    case 'turn_end':
       streamThinkingEl = null;
       streamTextEl = null;
       break;
-    case 'error':
+
+    case 'agent_end':
       streamThinkingEl = null;
       streamTextEl = null;
-      addSystemMessage('错误: ' + event.data);
       break;
   }
 }
@@ -1150,16 +1188,16 @@ function addToolCall(name, args, result = null) {
   }
 }
 
-function updateToolResult(name, success, output) {
+function updateToolResult(name, isError, output) {
   if (currentToolEl && currentToolEl.dataset.toolName === name) {
-    currentToolEl.className = C.TOOL_CALL + (success ? C.SUCCESS : C.ERROR);
+    currentToolEl.className = C.TOOL_CALL + (isError ? C.ERROR : C.SUCCESS);
 
     const statusEl = currentToolEl.querySelector('.' + C.TOOL_CALL_STATUS);
-    statusEl.textContent = success ? '✓' : '✗';
+    statusEl.textContent = isError ? '✗' : '✓';
 
     const outputEl = currentToolEl.querySelector('.' + C.TOOL_CALL_OUTPUT);
     if (output) {
-      outputEl.className = isToolErrorOutput(output, success) ? C.TOOL_CALL_ERROR : C.TOOL_CALL_OUTPUT;
+      outputEl.className = isError ? C.TOOL_CALL_ERROR : C.TOOL_CALL_OUTPUT;
       outputEl.textContent = output;
     }
 

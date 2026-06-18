@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ConversationManager } from '../electron/conversation-manager';
+import { ConversationManager } from '../electron/conversation-manager.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
