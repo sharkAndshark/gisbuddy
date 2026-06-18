@@ -1,10 +1,13 @@
 import { Agent } from '@earendil-works/pi-agent-core';
 import { getModel } from '@earendil-works/pi-ai';
-import { SessionManager, SettingsManager } from '@earendil-works/pi-coding-agent';
 import { ChatPanel, AppStorage, IndexedDBStorageBackend, ProviderKeysStore, SessionsStore, SettingsStore, setAppStorage } from '@earendil-works/pi-web-ui';
 import { html, render } from 'lit';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import * as path from 'path';
+
+// pi-coding-agent is Node.js-specific — use require() to avoid bundling import.meta.url issues
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { SessionManager, SettingsManager, AgentSession } = require('@earendil-works/pi-coding-agent');
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyObj = any;
@@ -28,7 +31,7 @@ const gisbuddy = (window as unknown as {
 let currentCwd: string | null = null;
 let chatPanel: ChatPanel | null = null;
 
-// ── Set up AppStorage (required by pi-web-ui's AgentInterface) ──
+// ── Set up AppStorage (required by pi-web-ui AgentInterface) ──
 function setupAppStorage(apiKey: string) {
   const settings = new SettingsStore();
   const providerKeys = new ProviderKeysStore();
@@ -54,7 +57,6 @@ function setupAppStorage(apiKey: string) {
   const storage = new AppStorage(settings, providerKeys, sessions, undefined as AnyObj, backend);
   setAppStorage(storage);
 
-  // Pre-populate API key
   providerKeys.set('deepseek', apiKey).catch(console.error);
 }
 
@@ -90,19 +92,13 @@ const TOOLS: AgentTool[] = [
   }),
 ];
 
-const SYSTEM_PROMPT = `You are GISBuddy, a helpful GIS data processing assistant. You have tools to execute bash commands, read files, write files, and edit files.
-
-When helping with GIS tasks:
-- Use bash to run geospatial tools like gdal_translate, ogr2ogr, gdalwarp, etc.
-- Use read to inspect files
-- Use write/edit to create or modify output files
-- Always explain what the command does before running it`;
+const SYSTEM_PROMPT = `You are GISBuddy, a helpful GIS data processing assistant. You have tools to execute bash commands, read files, write files, and edit files.`;
 
 // ── Initialization ──
 async function initApiKey(): Promise<string> {
   const stored = await gisbuddy.getApiKey();
   if (stored) return stored;
-  const key = prompt('请输入 DeepSeek API Key', '');
+  const key = prompt('请输入 DeepSeek API Key');
   if (!key) throw new Error('需要配置 API Key');
   await gisbuddy.configure(key);
   return key;
@@ -122,9 +118,7 @@ async function createAgentSession(cwd: string, apiKey: string) {
     getApiKey: async () => apiKey,
   });
 
-  // Use createAgentSession to get full AgentSession with compaction
-  const { AgentSession: AgentSessionCtor } = await import('@earendil-works/pi-coding-agent');
-  const session = new AgentSessionCtor({
+  const session = new AgentSession({
     agent: agent as AnyObj,
     sessionManager: sessionManager as AnyObj,
     settingsManager: settingsManager as AnyObj,
@@ -132,10 +126,6 @@ async function createAgentSession(cwd: string, apiKey: string) {
     modelRegistry: { getApiKeyAndHeaders: async () => ({ ok: true, apiKey }) } as AnyObj,
     resourceLoader: {
       cwd,
-      getResourcePaths: () => [],
-      loadSkills: () => [],
-      loadPromptTemplates: () => [],
-      loadSystemPrompt: () => SYSTEM_PROMPT,
       reload: async () => {},
     } as AnyObj,
     initialActiveToolNames: ['bash', 'read', 'write', 'edit'],
@@ -160,13 +150,11 @@ async function initApp() {
   setupAppStorage(apiKey);
 
   const projects = await gisbuddy.getProjects();
-
   if (projects.length === 0) {
     const newP = await gisbuddy.createProject();
     if (!newP) throw new Error('请选择一个项目文件夹');
     projects.push(newP);
   }
-
   const project = projects[0];
   currentCwd = project.folderPath;
 

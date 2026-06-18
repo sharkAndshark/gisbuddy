@@ -80,7 +80,7 @@ function createWindow() {
     trafficLightPosition: { x: 14, y: 13 },
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: false,
       nodeIntegration: true,
     },

@@ -16,10 +16,13 @@ await esbuild.build({
     'child_process',
     'util',
     'crypto',
+    'readline',
+    'stream',
+    'events',
+    'buffer',
+    'url',
+    '@earendil-works/pi-coding-agent',
   ],
-  loader: {
-    '.css': 'text',
-  },
   sourcemap: true,
 });
 
