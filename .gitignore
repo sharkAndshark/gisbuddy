@@ -5,6 +5,7 @@ release/
 .vscode/
 .DS_Store
 test-data/
+_reference/
 
 gdal-bin/
 !gdal-bin/.gitkeep

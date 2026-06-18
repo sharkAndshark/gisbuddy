@@ -1,4 +1,4 @@
-const fs = require('fs');
+import fs from 'fs';
 
 // ── Terminal colors ──
 const RESET = '\x1b[0m';

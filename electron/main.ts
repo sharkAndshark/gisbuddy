@@ -1,17 +1,27 @@
 import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import { Agent, AgentEvent } from './agent';
-import { isCompatibleCRS, extractEPSG } from './utils';
+import { fileURLToPath } from 'url';
+import type { Agent } from '@earendil-works/pi-agent-core';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { isCompatibleCRS, extractEPSG } from './utils.js';
 import { read as readShapefile } from 'shapefile';
-import { ConversationManager } from './conversation-manager';
+import { ConversationManager } from './conversation-manager.js';
+import { createGisbuddyAgent } from './gisbuddy-agent.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
-let agent: Agent | null = null;
 let conversationManager: ConversationManager | null = null;
 let isQuitting = false;
-const abortControllers = new Map<string, AbortController>();
+let apiKey: string | null = null;
+let activeAgent: Agent | null = null;
+
+function buildAgent(cwd: string): Agent {
+  return createGisbuddyAgent(cwd, apiKey!);
+}
 
 function getIconPath(name: string): string | undefined {
   const devPath = path.join(__dirname, '../../build/', name);
@@ -105,8 +115,9 @@ app.on('activate', () => {
   mainWindow?.focus();
 });
 
-ipcMain.handle('configure', async (_event, apiKey: string) => {
-  agent = new Agent(apiKey);
+ipcMain.handle('configure', async (_event, key: string) => {
+  apiKey = key;
+  activeAgent = null;
   return { success: true };
 });
 
@@ -278,8 +289,16 @@ ipcMain.handle('list-directory', async (_event, dirPath: string) => {
     });
 });
 
-ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: string }) => {
-  if (!agent || !conversationManager) {
+function safeSend(eventData: unknown) {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('agent-event', eventData);
+    }
+  } catch { console.warn('[safeSend] failed to send event, window likely destroyed'); }
+}
+
+ipcMain.handle('chat', async (_event, { convId, text }: { convId: string; text: string }) => {
+  if (!conversationManager || !apiKey) {
     throw new Error('请先配置 API Key');
   }
 
@@ -289,53 +308,56 @@ ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: s
   const project = conversationManager.getProject(conv.projectId);
   if (!project) throw new Error('对话所属项目不存在');
 
-  // 自动取消归档：如果对话所属项目已归档，发消息时自动恢复
   if (project.archived) {
     conversationManager.unarchiveProject(project.id);
   }
 
-  // 中止同一对话正在进行中的请求
-  const existing = abortControllers.get(convId);
-  if (existing) {
-    console.log('[chat] aborting previous request for conv:', convId);
-    existing.abort();
+  // Abort any in-progress agent run
+  if (activeAgent) {
+    activeAgent.abort();
+    await activeAgent.waitForIdle();
   }
-  const controller = new AbortController();
-  abortControllers.set(convId, controller);
 
-  conv.messages.push({ role: 'user', content: text });
-  conv.updatedAt = Date.now();
+  const cwd = project.folderPath;
+  const currentAgent = buildAgent(cwd);
+  activeAgent = currentAgent;
 
+  // Load existing conversation messages into agent state
+  currentAgent.state.messages = conv.messages as AgentMessage[];
+
+  // Subscribe to events and forward to renderer
   let finalReply = '';
+  const unsubscribe = currentAgent.subscribe((event) => {
+    safeSend(event);
 
-  const safeSend = (eventData: AgentEvent) => {
-    try {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('agent-event', eventData);
+    if (event.type === 'message_update') {
+      const ame = event.assistantMessageEvent;
+      if (ame.type === 'text_delta') {
+        finalReply += ame.delta;
       }
-    } catch { console.warn('[safeSend] failed to send event, window likely destroyed'); }
-  };
+    }
+  });
 
   try {
-    await agent.chat(
-      conv.messages as Parameters<typeof agent.chat>[0],
-      project.folderPath,
-      (eventData: AgentEvent) => {
-        safeSend(eventData);
-        if (eventData.type === 'text') {
-          finalReply = eventData.data;
-        }
-      },
-      controller.signal,
-    );
+    const userMsg: AgentMessage = {
+      role: 'user',
+      content: [{ type: 'text', text }],
+      timestamp: Date.now(),
+    };
+    await currentAgent.prompt(userMsg);
   } finally {
-    if (abortControllers.get(convId) === controller) {
-      abortControllers.delete(convId);
+    unsubscribe();
+    if (activeAgent === currentAgent) {
+      activeAgent = null;
     }
   }
 
+  // Sync messages back to ConversationManager
+  conv.messages = currentAgent.state.messages as unknown[];
+  conv.updatedAt = Date.now();
   conversationManager.save();
 
+  // Auto-title new conversations
   if (conv.title === '新对话' && finalReply) {
     const firstWords = text.slice(0, 30).replace(/\s+/g, ' ').trim();
     if (firstWords) {
@@ -347,13 +369,9 @@ ipcMain.handle('chat', async (event, { convId, text }: { convId: string; text: s
   return { reply: finalReply, updatedTitle: conv.title };
 });
 
-ipcMain.handle('cancel-chat', (_event, convId: string) => {
-  const controller = abortControllers.get(convId);
-  if (controller) {
-    console.log('[cancel-chat] aborting conv:', convId);
-    controller.abort();
-    if (abortControllers.get(convId) === controller) {
-      abortControllers.delete(convId);
-    }
+ipcMain.handle('cancel-chat', async (_event, _convId: string) => {
+  if (activeAgent) {
+    console.log('[cancel-chat] aborting agent');
+    activeAgent.abort();
   }
 });

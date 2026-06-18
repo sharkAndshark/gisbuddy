@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractEPSG, isCompatibleCRS } from '../electron/utils';
+import { extractEPSG, isCompatibleCRS } from '../electron/utils.js';
 
 describe('extractEPSG', () => {
   it('extracts EPSG code from WKT with AUTHORITY', () => {
