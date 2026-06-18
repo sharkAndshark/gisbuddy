@@ -14,5 +14,6 @@
     "sourceMap": true,
     "declaration": false
   },
-  "include": ["electron/**/*"]
+  "include": ["electron/**/*"],
+  "exclude": ["electron/preload.ts"]
 }

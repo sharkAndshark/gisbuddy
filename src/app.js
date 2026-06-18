@@ -1067,7 +1067,7 @@ function handleAgentEvent(event) {
             rendered = escHtml(text).replace(/\n/g, '<br>');
           }
           streamTextEl.innerHTML = rendered;
-        } else if (!streamTextEl) {
+        } else {
           const text = getTextContent(event.message);
           if (text) {
             addAiMessage(text);

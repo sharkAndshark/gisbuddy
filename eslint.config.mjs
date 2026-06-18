@@ -20,9 +20,19 @@ export default tseslint.config(
   },
   {
     files: ['electron/**/*.ts'],
+    ignores: ['electron/preload.ts'],
     languageOptions: {
       parserOptions: {
         project: './tsconfig.json',
+        tsconfigRootDir: __dirname,
+      },
+    },
+  },
+  {
+    files: ['electron/preload.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: './electron/tsconfig.preload.json',
         tsconfigRootDir: __dirname,
       },
     },
