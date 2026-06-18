@@ -32,11 +32,6 @@ function createTray() {
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: '显示 GISBuddy',
-      click: () => { mainWindow?.show(); mainWindow?.focus(); },
-    },
-    { type: 'separator' },
-    {
       label: '退出',
       click: () => app.quit(),
     },
