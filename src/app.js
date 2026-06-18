@@ -921,13 +921,12 @@ async function switchConversation(convId) {
             } else if (block.type === 'text' && block.text) {
               addAiMessage(block.text);
             } else if (block.type === 'toolCall') {
-              let args = {};
-              try { args = JSON.parse(block.function?.arguments || '{}'); } catch { /* ignore */ }
+              const args = block.arguments || {};
               const nextMsg = messages[i + 1];
               const hasResult = nextMsg?.role === 'toolResult' && nextMsg.toolCallId === block.id;
               const isError = hasResult ? !!nextMsg.isError : false;
               const output = hasResult ? getTextContent(nextMsg) : '';
-              addToolCall(block.function?.name || 'unknown', args, { success: !isError, output });
+              addToolCall(block.name || 'unknown', args, { success: !isError, output });
               if (hasResult) i++;
             }
           }
