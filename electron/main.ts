@@ -347,7 +347,9 @@ ipcMain.handle('chat', async (_event, { convId, text }: { convId: string; text: 
     await currentAgent.prompt(userMsg);
   } finally {
     unsubscribe();
-    activeAgent = null;
+    if (activeAgent === currentAgent) {
+      activeAgent = null;
+    }
   }
 
   // Sync messages back to ConversationManager
