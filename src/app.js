@@ -897,9 +897,12 @@ async function switchConversation(convId) {
   const conv = state.conversations.find(c => c.id === convId);
   if (conv) {
     const project = state.projects.find(p => p.id === conv.projectId);
-    if (project) {
+    if (project && project.folderPath) {
       state.currentDir = project.folderPath;
       refreshFileList();
+    } else {
+      state.currentDir = null;
+      UI.fileList.innerHTML = '';
     }
   }
 
