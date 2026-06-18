@@ -1,41 +1,32 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { ipcRenderer } from 'electron';
 
-contextBridge.exposeInMainWorld('gisbuddy', {
+declare const window: Record<string, unknown> & typeof globalThis;
+
+window.gisbuddy = {
+  // ── Config ──
   configure: (apiKey: string) => ipcRenderer.invoke('configure', apiKey),
+  getApiKey: () => ipcRenderer.invoke('get-api-key'),
 
-  getConversations: () => ipcRenderer.invoke('get-conversations'),
-
-  createConversation: (projectId: string) => ipcRenderer.invoke('create-conversation', projectId),
-
-  deleteConversation: (id: string) => ipcRenderer.invoke('delete-conversation', id),
-
-  renameConversation: (id: string, title: string) => ipcRenderer.invoke('rename-conversation', id, title),
-
-  getMessages: (id: string) => ipcRenderer.invoke('get-messages', id),
-
+  // ── Project management ──
   getProjects: () => ipcRenderer.invoke('get-projects'),
-
   createProject: () => ipcRenderer.invoke('create-project'),
-
   renameProject: (id: string, title: string) => ipcRenderer.invoke('rename-project', id, title),
-
   archiveProject: (id: string) => ipcRenderer.invoke('archive-project', id),
-
   unarchiveProject: (id: string) => ipcRenderer.invoke('unarchive-project', id),
-
   moveConversation: (convId: string, projectId: string) => ipcRenderer.invoke('move-conversation', convId, projectId),
 
-  chat: (convId: string, text: string) => ipcRenderer.invoke('chat', { convId, text }),
+  // ── Conversation metadata ──
+  getConversations: () => ipcRenderer.invoke('get-conversations'),
+  createConversation: (projectId: string) => ipcRenderer.invoke('create-conversation', projectId),
+  deleteConversation: (id: string) => ipcRenderer.invoke('delete-conversation', id),
+  renameConversation: (id: string, title: string) => ipcRenderer.invoke('rename-conversation', id, title),
+  setConversationSessionId: (id: string, sessionId: string) => ipcRenderer.invoke('set-conversation-session-id', id, sessionId),
 
-  cancelChat: (convId: string) => ipcRenderer.invoke('cancel-chat', convId),
+  // ── Tool execution bridge ──
+  toolExec: (toolName: string, params: unknown, cwd: string) =>
+    ipcRenderer.invoke('tool-exec', { toolName, params, cwd }),
 
-  listDirectory: (dirPath: string) => ipcRenderer.invoke('list-directory', dirPath),
-
+  // ── File operations ──
   readFile: (filePath: string) => ipcRenderer.invoke('read-file', filePath),
-
-  onAgentEvent: (callback: (data: unknown) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => callback(data);
-    ipcRenderer.on('agent-event', handler);
-    return () => ipcRenderer.removeListener('agent-event', handler);
-  },
-});
+  listDirectory: (dirPath: string) => ipcRenderer.invoke('list-directory', dirPath),
+};

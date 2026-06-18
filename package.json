@@ -6,7 +6,7 @@
   "type": "module",
   "main": "dist/electron/main.js",
   "scripts": {
-    "build": "tsc && tsc -p electron/tsconfig.preload.json",
+    "build": "tsc && tsc -p electron/tsconfig.preload.json && node scripts/build-renderer.mjs",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron .",
     "pack": "electron-builder --dir",
@@ -21,6 +21,8 @@
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.79.6",
     "@earendil-works/pi-ai": "^0.79.6",
+    "@earendil-works/pi-coding-agent": "^0.79.6",
+    "@earendil-works/pi-web-ui": "^0.75.3",
     "fast-xml-parser": "^5.9.0",
     "shapefile": "^0.6.6"
   },
@@ -29,6 +31,7 @@
     "@types/node": "^22.0.0",
     "electron": "^33.0.0",
     "electron-builder": "^24.0.0",
+    "esbuild": "^0.28.1",
     "eslint": "^10.5.0",
     "husky": "^9.1.7",
     "sharp": "^0.35.1",
@@ -45,7 +48,7 @@
     "icon": "build/icon-duck.icns",
     "files": [
       "dist/**/*",
-      "src/**/*",
+      "src/index.html",
       "package.json"
     ],
     "extraResources": [
