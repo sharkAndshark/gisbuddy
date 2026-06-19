@@ -78,16 +78,19 @@ const TOOLS: AgentTool[] = [
 const SYSTEM_PROMPT = 'You are GISBuddy, a helpful GIS data processing assistant. You have tools to execute bash commands, read files, write files, and edit files.';
 
 // ── Chat panel management ──
+let switchSeq = 0;
+
 async function switchToConversation(convId: string) {
   const conv = conversations.find(c => c.id === convId);
   if (!conv) return;
-
-  currentConvId = convId;
   const project = projects.find(p => p.id === conv.projectId);
   if (!project) return;
+
+  currentConvId = convId;
   currentCwd = project.folderPath;
 
   // Create fresh Agent for this conversation
+  const seq = ++switchSeq;
   currentAgent = new Agent({
     initialState: {
       systemPrompt: SYSTEM_PROMPT,
@@ -97,22 +100,26 @@ async function switchToConversation(convId: string) {
     getApiKey: async () => apiKey,
   });
 
-  // Create new ChatPanel and set agent
   chatPanel = document.createElement('pi-chat-panel') as ChatPanel;
   await chatPanel.setAgent(currentAgent as AnyObj, {
     onApiKeyRequired: async () => true,
   });
 
+  // Drop stale invocation if user clicked another conversation in the meantime
+  if (seq !== switchSeq) return;
   renderApp();
 }
 
 // ── Actions ──
 async function handleNewProject() {
   const newP = await gisbuddy.createProject();
-  if (newP) {
-    projects = await gisbuddy.getProjects();
-    await handleSelectProject(newP.id);
+  if (!newP) {
+    // User cancelled dialog — re-render to update sidebar/loading state
+    renderApp();
+    return;
   }
+  projects = await gisbuddy.getProjects();
+  await handleSelectProject(newP.id);
 }
 
 async function handleSelectProject(projectId: string) {
