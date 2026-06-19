@@ -1,6 +1,6 @@
 import { Agent } from '@earendil-works/pi-agent-core';
 import { getModel } from '@earendil-works/pi-ai';
-import { ChatPanel, AppStorage, IndexedDBStorageBackend, ProviderKeysStore, SessionsStore, SettingsStore, setAppStorage } from '@earendil-works/pi-web-ui';
+import { ChatPanel, AppStorage, IndexedDBStorageBackend, ProviderKeysStore, SessionsStore, SettingsStore, setAppStorage, getAppStorage } from '@earendil-works/pi-web-ui';
 import { registerFauxProvider, fauxAssistantMessage, fauxText, fauxToolCall, fauxThinking } from '@earendil-works/pi-ai/faux';
 import { html, render } from 'lit';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
@@ -46,6 +46,7 @@ const gisbuddy = (window as unknown as {
     deleteConversation: (id: string) => Promise<void>;
     renameConversation: (id: string, title: string) => Promise<void>;
     moveConversation: (convId: string, projectId: string) => Promise<void>;
+    setConversationSessionId: (id: string, sessionId: string) => Promise<void>;
   };
 }).gisbuddy;
 
@@ -101,6 +102,10 @@ const SYSTEM_PROMPT = 'You are GISBuddy, a helpful GIS data processing assistant
 // ── Chat panel management ──
 let switchSeq = 0;
 
+function generateSessionId() {
+  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 async function switchToConversation(convId: string) {
   if (convId === currentConvId) return;
   const conv = conversations.find(c => c.id === convId);
@@ -118,13 +123,36 @@ async function switchToConversation(convId: string) {
   msgListFixUnsub?.();
   msgListFixUnsub = null;
 
+  // ── Session persistence: restore saved messages, ensure sessionId ──
+  let sessionId = conv.sessionId;
+  let initialMessages: AnyObj[] = [];
+
+  if (sessionId && !isTestMode) {
+    try {
+      const saved = await getAppStorage().sessions.loadSession(sessionId);
+      if (saved?.messages?.length) {
+        initialMessages = saved.messages;
+      }
+    } catch { /* IndexedDB may not be ready */ }
+  }
+
+  // Ensure every conversation has a sessionId for persistence
+  if (!sessionId) {
+    sessionId = generateSessionId();
+    conv.sessionId = sessionId;
+    try { await gisbuddy.setConversationSessionId(convId, sessionId); }
+    catch { /* IPC may fail */ }
+  }
+
   // Create fresh Agent with tools bound to this project's cwd
   const agent = new Agent({
     initialState: {
       systemPrompt: SYSTEM_PROMPT,
       model: fauxModel ?? getModel('deepseek', 'deepseek-v4-pro'),
       tools: createTools(currentCwd),
+      messages: initialMessages,
     },
+    sessionId: isTestMode ? undefined : sessionId,
     getApiKey: async () => apiKey,
   });
   currentAgent = agent;
@@ -145,6 +173,26 @@ async function switchToConversation(convId: string) {
     if (event.type === 'message_end' || event.type === 'agent_end') {
       const msgList = chatPanel?.querySelector('message-list') as AnyObj;
       if (msgList) msgList.messages = [...(agent.state.messages)];
+    }
+    // Persist session after each run (skip test mode to avoid saving faux data)
+    if (event.type === 'agent_end' && sessionId && !isTestMode) {
+      try {
+        await getAppStorage().sessions.saveSession(sessionId, agent.state);
+      } catch { /* IndexedDB save may fail */ }
+      // Auto-title from first assistant message
+      if (conv.title === '新对话') {
+        const firstReply = agent.state.messages.find((m: AnyObj) => m.role === 'assistant');
+        if (firstReply) {
+          const text = firstReply.content.find((b: AnyObj) => b.type === 'text');
+          if (text) {
+            const title = text.text.slice(0, 30);
+            conv.title = title;
+            try { await gisbuddy.renameConversation(convId, title); }
+            catch { /* IPC may fail */ }
+            renderApp();
+          }
+        }
+      }
     }
   });
 
@@ -185,7 +233,13 @@ async function handleNewConversation(projectId: string) {
 }
 
 async function handleDeleteConversation(convId: string) {
+  const conv = conversations.find(c => c.id === convId);
   await gisbuddy.deleteConversation(convId);
+  // Clean up persisted session data
+  if (conv?.sessionId && !isTestMode) {
+    try { await getAppStorage().sessions.deleteSession(conv.sessionId); }
+    catch { /* IndexedDB may fail */ }
+  }
   conversations = await gisbuddy.getConversations();
   if (convId === currentConvId) {
     const projectConvs = conversations.filter(c => c.projectId === currentProjectId);
