@@ -1,13 +1,9 @@
 import { test, expect } from '@playwright/test';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import { launchApp, cleanupApp } from './fixtures/app';
 
 test.describe('App 启动', () => {
   test('ChatPanel 渲染', async () => {
-    const projectDir = path.join(os.tmpdir(), 'gisbuddy-e2e-proj-' + Date.now());
-    const { app, page, tmpDir } = await launchApp({ withProject: projectDir });
+    const { app, page, tmpDir } = await launchApp({ withProject: 'e2e-startup' });
 
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
@@ -15,13 +11,11 @@ test.describe('App 启动', () => {
       expect(count).toBeGreaterThan(0);
     } finally {
       await cleanupApp(app, tmpDir);
-      fs.rmSync(projectDir, { recursive: true, force: true });
     }
   });
 
   test('预配置项目后正常加载', async () => {
-    const projectDir = path.join(os.tmpdir(), 'gisbuddy-e2e-proj-' + Date.now());
-    const { app, page, tmpDir } = await launchApp({ withProject: projectDir });
+    const { app, page, tmpDir } = await launchApp({ withProject: 'e2e-load' });
 
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
@@ -29,13 +23,11 @@ test.describe('App 启动', () => {
       expect(bodyText).not.toContain('启动失败');
     } finally {
       await cleanupApp(app, tmpDir);
-      fs.rmSync(projectDir, { recursive: true, force: true });
     }
   });
 
   test('Tool IPC 桥正常工作', async () => {
-    const projectDir = path.join(os.tmpdir(), 'gisbuddy-e2e-proj-' + Date.now());
-    const { app, page, tmpDir } = await launchApp({ withProject: projectDir });
+    const { app, page, tmpDir } = await launchApp({ withProject: 'e2e-tool' });
 
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
@@ -50,13 +42,11 @@ test.describe('App 启动', () => {
       expect(result.value.content[0].text).toContain('e2e-test');
     } finally {
       await cleanupApp(app, tmpDir);
-      fs.rmSync(projectDir, { recursive: true, force: true });
     }
   });
 
   test('侧边栏渲染项目和对话列表', async () => {
-    const projectDir = path.join(os.tmpdir(), 'gisbuddy-e2e-proj-' + Date.now());
-    const { app, page, tmpDir } = await launchApp({ withProject: projectDir });
+    const { app, page, tmpDir } = await launchApp({ withProject: 'e2e-sidebar' });
 
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
@@ -64,14 +54,13 @@ test.describe('App 启动', () => {
       // Sidebar should contain the project name
       const sidebar = page.locator('[data-testid="sidebar"]');
       const sidebarText = await sidebar.textContent();
-      expect(sidebarText).toContain(path.basename(projectDir));
+      expect(sidebarText).toContain('e2e-sidebar');
 
       // Sidebar should have +项目 button
       const newProjectBtn = page.locator('button', { hasText: '+ 项目' });
       expect(await newProjectBtn.count()).toBeGreaterThan(0);
     } finally {
       await cleanupApp(app, tmpDir);
-      fs.rmSync(projectDir, { recursive: true, force: true });
     }
   });
 });
