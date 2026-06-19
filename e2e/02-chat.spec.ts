@@ -1,13 +1,9 @@
 import { test, expect } from '@playwright/test';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import { launchApp, cleanupApp } from './fixtures/app';
 
 test.describe('Chat with faux LLM', () => {
   test('发送消息 → 收到纯文本回复', async () => {
-    const projectDir = path.join(os.tmpdir(), 'gisbuddy-e2e-chat-' + Date.now());
-    const { app, page, tmpDir } = await launchApp({ withProject: projectDir, testMode: true });
+    const { app, page, tmpDir } = await launchApp({ withProject: 'e2e-chat', testMode: true });
 
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
@@ -25,13 +21,11 @@ test.describe('Chat with faux LLM', () => {
       await expect(page.locator('assistant-message').last()).toContainText('测试回复', { timeout: 5000 });
     } finally {
       await cleanupApp(app, tmpDir);
-      fs.rmSync(projectDir, { recursive: true, force: true });
     }
   });
 
   test('Agent 返回 thinking 块 → 前端渲染 thinking-block', async () => {
-    const projectDir = path.join(os.tmpdir(), 'gisbuddy-e2e-think-' + Date.now());
-    const { app, page, tmpDir } = await launchApp({ withProject: projectDir, testMode: true });
+    const { app, page, tmpDir } = await launchApp({ withProject: 'e2e-think', testMode: true });
 
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
@@ -59,13 +53,11 @@ test.describe('Chat with faux LLM', () => {
       expect(thinkText).toContain('Step 1');
     } finally {
       await cleanupApp(app, tmpDir);
-      fs.rmSync(projectDir, { recursive: true, force: true });
     }
   });
 
   test('Agent 返回错误 → 前端展示错误信息', async () => {
-    const projectDir = path.join(os.tmpdir(), 'gisbuddy-e2e-err-' + Date.now());
-    const { app, page, tmpDir } = await launchApp({ withProject: projectDir, testMode: true });
+    const { app, page, tmpDir } = await launchApp({ withProject: 'e2e-err', testMode: true });
 
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
@@ -85,13 +77,11 @@ test.describe('Chat with faux LLM', () => {
       await expect(page.locator('assistant-message').last()).toContainText('模拟的网络错误', { timeout: 5000 });
     } finally {
       await cleanupApp(app, tmpDir);
-      fs.rmSync(projectDir, { recursive: true, force: true });
     }
   });
 
   test('发送消息 → Agent 调用 bash 工具 → 收到工具输出', async () => {
-    const projectDir = path.join(os.tmpdir(), 'gisbuddy-e2e-toolchat-' + Date.now());
-    const { app, page, tmpDir } = await launchApp({ withProject: projectDir, testMode: true });
+    const { app, page, tmpDir } = await launchApp({ withProject: 'e2e-tool', testMode: true });
 
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
@@ -116,7 +106,6 @@ test.describe('Chat with faux LLM', () => {
       await expect(page.locator('tool-message').last()).toContainText('hello-from-faux-bash', { timeout: 10000 });
     } finally {
       await cleanupApp(app, tmpDir);
-      fs.rmSync(projectDir, { recursive: true, force: true });
     }
   });
 });
