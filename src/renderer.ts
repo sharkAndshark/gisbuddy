@@ -47,8 +47,13 @@ const gisbuddy = (window as unknown as {
     renameConversation: (id: string, title: string) => Promise<void>;
     moveConversation: (convId: string, projectId: string) => Promise<void>;
     setConversationSessionId: (id: string, sessionId: string) => Promise<void>;
+    listDirectory: (dirPath: string) => Promise<FileEntry[]>;
+    readFile: (filePath: string) => Promise<FileViewData>;
   };
 }).gisbuddy;
+
+interface FileEntry { name: string; path: string; isDirectory: boolean; size: number; ext: string; }
+interface FileViewData { type: 'text' | 'image' | 'geojson' | 'error'; content: string; name?: string; message?: string; }
 
 // ── Global state ──
 let apiKey = '';
@@ -60,6 +65,13 @@ let currentCwd: string | null = null;
 let chatPanel: ChatPanel | null = null;
 let currentAgent: Agent | null = null;
 let msgListFixUnsub: (() => void) | null = null;
+
+// ── File tree state ──
+let currentDir = '';
+let fileTreeEntries: FileEntry[] = [];
+let activeFilePath: string | null = null;
+let fileViewData: FileViewData | null = null;
+let mapInstance: AnyObj | null = null;
 
 // ── AppStorage (required by pi-web-ui AgentInterface) ──
 function setupAppStorage(key: string) {
@@ -116,6 +128,12 @@ async function switchToConversation(convId: string) {
   currentConvId = convId;
   currentProjectId = conv.projectId;
   currentCwd = project.folderPath;
+
+  // Initialize file tree
+  currentDir = currentCwd;
+  activeFilePath = null;
+  fileViewData = null;
+  if (mapInstance) { mapInstance.remove(); mapInstance = null; }
 
   // Abort previous Agent to stop any in-flight streaming
   const seq = ++switchSeq;
@@ -189,8 +207,9 @@ async function switchToConversation(convId: string) {
             conv.title = title;
             try { await gisbuddy.renameConversation(convId, title); }
             catch { /* IPC may fail */ }
-            renderApp();
-          }
+  renderApp();
+  refreshFileTree(); // async, re-renders when entries arrive
+}
         }
       }
     }
@@ -315,6 +334,169 @@ function renderSidebar() {
   `;
 }
 
+// ── File tree ──
+const FILE_ICONS: Record<string, string> = {
+  '.tif': '🖼️', '.tiff': '🖼️', '.shp': '🗺️', '.geojson': '📋',
+  '.json': '📋', '.gpkg': '🗄️', '.csv': '📊', '.xml': '📄',
+  '.jpg': '🖼️', '.jpeg': '🖼️', '.png': '🖼️',
+};
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function refreshFileTree(dir?: string) {
+  if (dir !== undefined) currentDir = dir;
+  if (!currentDir) return;
+  try {
+    fileTreeEntries = await gisbuddy.listDirectory(currentDir);
+  } catch {
+    fileTreeEntries = [];
+  }
+  renderApp();
+}
+
+function parentDir(filePath: string) {
+  const i = filePath.lastIndexOf('/');
+  return i > 0 ? filePath.slice(0, i) : '/';
+}
+
+function handleDirClick(dirPath: string) {
+  refreshFileTree(dirPath);
+}
+
+async function handleFileClick(filePath: string) {
+  activeFilePath = filePath;
+  fileViewData = null;
+  if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+  renderApp();
+  try {
+    const data = await gisbuddy.readFile(filePath);
+    if (activeFilePath === filePath) {
+      fileViewData = data;
+      renderApp();
+      // Leaflet map needs a tick to render after DOM update
+      if (data.type === 'geojson') {
+        requestAnimationFrame(() => initMap(data.content));
+      }
+    }
+  } catch {
+    if (activeFilePath === filePath) {
+      fileViewData = { type: 'error', content: '', message: '读取文件失败' };
+      renderApp();
+    }
+  }
+}
+
+function handleCloseFile() {
+  activeFilePath = null;
+  fileViewData = null;
+  if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+  renderApp();
+}
+
+function initMap(geojson: string) {
+  const mapEl = document.getElementById('gisbuddy-map');
+  if (!mapEl) return;
+  const map = (window as AnyObj).L.map(mapEl, { zoomControl: true });
+  (window as AnyObj).L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+  }).addTo(map);
+  let layer: AnyObj;
+  try {
+    const geo = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
+    layer = (window as AnyObj).L.geoJSON(geo, {
+      pointToLayer: (_f: AnyObj, latlng: AnyObj) =>
+        (window as AnyObj).L.circleMarker(latlng, {
+          radius: 6, fillColor: '#3388ff', color: '#fff', weight: 2, fillOpacity: 0.8,
+        }),
+    }).addTo(map);
+  } catch {
+    return;
+  }
+  if (layer.getLayers().length > 0) {
+    map.fitBounds(layer.getBounds(), { padding: [20, 20] });
+  } else {
+    map.setView([0, 0], 2);
+  }
+  setTimeout(() => map.invalidateSize(), 0);
+  mapInstance = map;
+}
+
+function renderFileTree() {
+  const upOne = currentDir && currentDir !== currentCwd;
+  return html`
+    <div style="width:220px;height:100vh;border-left:1px solid #e0e0e0;display:flex;flex-direction:column;background:#fafafa;font-family:system-ui,sans-serif;font-size:13px;">
+      <div style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+        📂 ${currentDir ? currentDir.slice(currentDir.lastIndexOf('/') + 1) || currentDir : '—'}
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:4px 0;">
+        ${upOne ? html`
+          <div @click=${() => handleDirClick(parentDir(currentDir))}
+            style="padding:4px 12px;cursor:pointer;color:#4a90d9;display:flex;align-items:center;gap:6px;font-size:12px;">
+            <span>📁</span><span>..</span>
+          </div>
+        ` : ''}
+        ${fileTreeEntries.map(entry => html`
+          <div @click=${() => entry.isDirectory ? handleDirClick(entry.path) : handleFileClick(entry.path)}
+            style="padding:4px 12px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:${entry.isDirectory ? '#555' : '#333'};"
+          >
+            <span>${entry.isDirectory ? '📁' : (FILE_ICONS[entry.ext] || '📄')}</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${entry.name}</span>
+            ${entry.isDirectory ? '' : html`<span style="color:#aaa;font-size:10px;">${formatFileSize(entry.size)}</span>`}
+          </div>
+        `)}
+      </div>
+    </div>
+  `;
+}
+
+function renderFileView() {
+  if (!activeFilePath) {
+    return chatPanel ?? html`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">选择一个对话</div>`;
+  }
+
+  const name = activeFilePath.slice(activeFilePath.lastIndexOf('/') + 1);
+  const header = html`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid #e0e0e0;background:#fff;">
+      <button @click=${handleCloseFile} style="border:none;background:none;cursor:pointer;font-size:14px;color:#888;">← 返回</button>
+      <span style="font-size:13px;color:#555;">${name}</span>
+    </div>
+  `;
+
+  if (!fileViewData) {
+    return html`${header}<div style="display:flex;align-items:center;justify-content:center;flex:1;color:#888;">加载中...</div>`;
+  }
+
+  const data = fileViewData;
+  let body;
+  switch (data.type) {
+    case 'text':
+      body = html`<pre style="flex:1;overflow:auto;margin:0;padding:16px;background:#f6f8fa;font-family:monospace;font-size:13px;white-space:pre-wrap;">${data.content}</pre>`;
+      break;
+    case 'image':
+      body = html`<div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:#f0f0f0;">
+        <img src="${data.content}" alt="${data.name}" style="max-width:100%;max-height:100%;" />
+      </div>`;
+      break;
+    case 'geojson':
+      body = html`<div id="gisbuddy-map" style="flex:1;width:100%;"></div>`;
+      break;
+    case 'error':
+    default:
+      body = html`<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#999;font-size:14px;">${data.message || '无法预览此文件'}</div>`;
+      break;
+  }
+
+  return html`
+    <div style="display:flex;flex-direction:column;height:100%;">
+      ${header}${body}
+    </div>
+  `;
+}
+
 // ── Main render ──
 function renderApp() {
   const app = document.getElementById('app');
@@ -324,8 +506,9 @@ function renderApp() {
     <div style="display:flex;width:100vw;height:100vh;overflow:hidden;">
       ${renderSidebar()}
       <div style="flex:1;height:100vh;display:flex;flex-direction:column;min-width:0;">
-        ${chatPanel ?? html`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">选择一个对话</div>`}
+        ${renderFileView()}
       </div>
+      ${renderFileTree()}
     </div>
   `, app);
 }
