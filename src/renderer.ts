@@ -91,8 +91,11 @@ async function switchToConversation(convId: string) {
   currentProjectId = conv.projectId;
   currentCwd = project.folderPath;
 
-  // Create fresh Agent with tools bound to this project's cwd
+  // Abort previous Agent to stop any in-flight streaming
   const seq = ++switchSeq;
+  try { currentAgent?.abort(); } catch { /* ignore */ }
+
+  // Create fresh Agent with tools bound to this project's cwd
   currentAgent = new Agent({
     initialState: {
       systemPrompt: SYSTEM_PROMPT,
@@ -106,11 +109,12 @@ async function switchToConversation(convId: string) {
   if (!chatPanel) {
     chatPanel = document.createElement('pi-chat-panel') as ChatPanel;
   }
+  // Drop stale invocation before expensive setAgent call
+  if (seq !== switchSeq) return;
   await chatPanel.setAgent(currentAgent as AnyObj, {
     onApiKeyRequired: async () => true,
   });
 
-  // Drop stale invocation if user clicked another conversation in the meantime
   if (seq !== switchSeq) return;
   renderApp();
 }
@@ -129,6 +133,7 @@ async function handleNewProject() {
 
 async function handleSelectProject(projectId: string) {
   currentProjectId = projectId;
+  conversations = await gisbuddy.getConversations();
   const projectConvs = conversations.filter(c => c.projectId === projectId);
   if (projectConvs.length > 0) {
     await switchToConversation(projectConvs[0].id);
