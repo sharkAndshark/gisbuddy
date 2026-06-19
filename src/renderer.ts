@@ -27,7 +27,6 @@ const gisbuddy = (window as unknown as {
     deleteConversation: (id: string) => Promise<void>;
     renameConversation: (id: string, title: string) => Promise<void>;
     moveConversation: (convId: string, projectId: string) => Promise<void>;
-    setConversationSessionId: (id: string, sessionId: string) => Promise<void>;
   };
 }).gisbuddy;
 
@@ -135,7 +134,6 @@ async function handleNewProject() {
 }
 
 async function handleSelectProject(projectId: string) {
-  currentProjectId = projectId;
   conversations = await gisbuddy.getConversations();
   const projectConvs = conversations.filter(c => c.projectId === projectId);
   if (projectConvs.length > 0) {
