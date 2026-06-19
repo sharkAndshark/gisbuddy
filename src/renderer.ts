@@ -136,11 +136,15 @@ async function handleNewConversation(projectId: string) {
 async function handleDeleteConversation(convId: string) {
   await gisbuddy.deleteConversation(convId);
   conversations = await gisbuddy.getConversations();
-  const projectConvs = conversations.filter(c => c.projectId === currentProjectId);
-  if (projectConvs.length > 0) {
-    await switchToConversation(projectConvs[0].id);
-  } else if (currentProjectId) {
-    await handleNewConversation(currentProjectId);
+  if (convId === currentConvId) {
+    const projectConvs = conversations.filter(c => c.projectId === currentProjectId);
+    if (projectConvs.length > 0) {
+      await switchToConversation(projectConvs[0].id);
+    } else if (currentProjectId) {
+      await handleNewConversation(currentProjectId);
+    }
+  } else {
+    renderApp();
   }
 }
 
@@ -198,7 +202,7 @@ function renderSidebar() {
 
       <!-- Footer -->
       <div style="padding:8px 16px;border-top:1px solid #e0e0e0;">
-        <span style="font-size:11px;color:#aaa;">${projects.length} 个项目</span>
+        <span style="font-size:11px;color:#aaa;">${activeProjects.length} 个项目</span>
       </div>
     </div>
   `;
