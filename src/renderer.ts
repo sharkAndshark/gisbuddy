@@ -134,10 +134,12 @@ async function handleSelectProject(projectId: string) {
 
 async function handleNewConversation(projectId: string) {
   const newConv = await gisbuddy.createConversation(projectId);
-  if (newConv) {
-    conversations = await gisbuddy.getConversations();
-    await switchToConversation(newConv.id);
+  if (!newConv) {
+    renderApp();
+    return;
   }
+  conversations = await gisbuddy.getConversations();
+  await switchToConversation(newConv.id);
 }
 
 async function handleDeleteConversation(convId: string) {
@@ -149,6 +151,8 @@ async function handleDeleteConversation(convId: string) {
       await switchToConversation(projectConvs[0].id);
     } else if (currentProjectId) {
       await handleNewConversation(currentProjectId);
+    } else {
+      renderApp();
     }
   } else {
     renderApp();
