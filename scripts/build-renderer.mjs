@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import * as esbuild from 'esbuild';
+import * as fs from 'fs';
 
 await esbuild.build({
   entryPoints: ['src/renderer.ts'],
@@ -18,6 +19,15 @@ await esbuild.build({
     'zlib', 'querystring', 'assert',
     'node:fs', 'node:path', 'node:os', 'node:crypto', 'node:http',
   ],
+  plugins: [{
+    name: 'faux-provider',
+    setup(build) {
+      build.onResolve({ filter: /^@earendil-works\/pi-ai\/faux$/ }, () => ({
+        path: fs.realpathSync('node_modules/@earendil-works/pi-ai/dist/providers/faux.js'),
+        namespace: 'file',
+      }));
+    },
+  }],
   sourcemap: true,
 });
 

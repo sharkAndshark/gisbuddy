@@ -5,6 +5,7 @@ import * as os from 'os';
 
 export interface LaunchOptions {
   withProject?: string;
+  testMode?: boolean;
 }
 
 export async function launchApp(opts?: LaunchOptions): Promise<{ app: ElectronApplication; page: Page; tmpDir: string }> {
@@ -41,6 +42,7 @@ export async function launchApp(opts?: LaunchOptions): Promise<{ app: ElectronAp
       ...process.env,
       GISBUDDY_API_KEY: 'test-fake-key',
       GISBUDDY_USER_DATA: tmpDir,
+      ...(opts?.testMode ? { GISBUDDY_TEST: '1' } : {}),
     },
     timeout: 30000,
   });

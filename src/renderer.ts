@@ -1,13 +1,31 @@
 import { Agent } from '@earendil-works/pi-agent-core';
 import { getModel } from '@earendil-works/pi-ai';
 import { ChatPanel, AppStorage, IndexedDBStorageBackend, ProviderKeysStore, SessionsStore, SettingsStore, setAppStorage } from '@earendil-works/pi-web-ui';
+import { registerFauxProvider, fauxAssistantMessage, fauxText, fauxToolCall, fauxThinking } from '@earendil-works/pi-ai/faux';
 import { html, render } from 'lit';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 console.log('[GISBuddy] bundle.js loaded');
 
+const isTestMode = typeof process !== 'undefined' && process.env?.GISBUDDY_TEST === '1';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyObj = any;
+
+// ── Faux provider (E2E test mode) ──
+let fauxModel: ReturnType<typeof getModel> | null = null;
+if (isTestMode) {
+  const reg = registerFauxProvider({
+    models: [{ id: 'deepseek-v4-pro', name: 'Faux DeepSeek V4 Pro', contextWindow: 1000000, maxTokens: 384000 }],
+    tokensPerSecond: 1000,
+  });
+  fauxModel = reg.getModel();
+  (window as AnyObj).__faux = {
+    fauxText, fauxThinking, fauxToolCall, fauxAssistantMessage,
+    setResponses: (r: unknown[]) => reg.setResponses(r),
+  };
+  console.log('[GISBuddy] test mode: faux provider registered');
+}
 
 interface Project { id: string; title: string; folderPath: string; createdAt: number; archived: boolean }
 interface Conversation { id: string; title: string; projectId: string; sessionId: string }
@@ -39,6 +57,7 @@ let currentConvId: string | null = null;
 let currentCwd: string | null = null;
 let chatPanel: ChatPanel | null = null;
 let currentAgent: Agent | null = null;
+let msgListFixUnsub: (() => void) | null = null;
 
 // ── AppStorage (required by pi-web-ui AgentInterface) ──
 function setupAppStorage(key: string) {
@@ -95,12 +114,14 @@ async function switchToConversation(convId: string) {
   // Abort previous Agent to stop any in-flight streaming
   const seq = ++switchSeq;
   try { currentAgent?.abort(); } catch { /* ignore */ }
+  msgListFixUnsub?.();
+  msgListFixUnsub = null;
 
   // Create fresh Agent with tools bound to this project's cwd
   const agent = new Agent({
     initialState: {
       systemPrompt: SYSTEM_PROMPT,
-      model: getModel('deepseek', 'deepseek-v4-pro'),
+      model: fauxModel ?? getModel('deepseek', 'deepseek-v4-pro'),
       tools: createTools(currentCwd),
     },
     getApiKey: async () => apiKey,
@@ -115,6 +136,13 @@ async function switchToConversation(convId: string) {
   if (seq !== switchSeq) return;
   await chatPanel.setAgent(agent as AnyObj, {
     onApiKeyRequired: async () => true,
+  });
+  msgListFixUnsub?.();
+  msgListFixUnsub = agent.subscribe(async (event: Record<string, unknown>) => {
+    if (event.type === 'message_end' || event.type === 'agent_end') {
+      const msgList = chatPanel?.querySelector('message-list') as AnyObj;
+      if (msgList) msgList.messages = [...(agent.state.messages)];
+    }
   });
 
   if (seq !== switchSeq) return;
