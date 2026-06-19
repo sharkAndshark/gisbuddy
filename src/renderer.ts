@@ -26,6 +26,7 @@ const gisbuddy = (window as unknown as {
     createConversation: (projectId: string) => Promise<Conversation | null>;
     deleteConversation: (id: string) => Promise<void>;
     renameConversation: (id: string, title: string) => Promise<void>;
+    moveConversation: (convId: string, projectId: string) => Promise<void>;
     setConversationSessionId: (id: string, sessionId: string) => Promise<void>;
   };
 }).gisbuddy;
@@ -82,6 +83,7 @@ const SYSTEM_PROMPT = 'You are GISBuddy, a helpful GIS data processing assistant
 let switchSeq = 0;
 
 async function switchToConversation(convId: string) {
+  if (convId === currentConvId) return;
   const conv = conversations.find(c => c.id === convId);
   if (!conv) return;
   const project = projects.find(p => p.id === conv.projectId);
@@ -96,7 +98,7 @@ async function switchToConversation(convId: string) {
   try { currentAgent?.abort(); } catch { /* ignore */ }
 
   // Create fresh Agent with tools bound to this project's cwd
-  currentAgent = new Agent({
+  const agent = new Agent({
     initialState: {
       systemPrompt: SYSTEM_PROMPT,
       model: getModel('deepseek', 'deepseek-v4-pro'),
@@ -104,6 +106,7 @@ async function switchToConversation(convId: string) {
     },
     getApiKey: async () => apiKey,
   });
+  currentAgent = agent;
 
   // Reuse ChatPanel element, only update the agent
   if (!chatPanel) {
@@ -111,7 +114,7 @@ async function switchToConversation(convId: string) {
   }
   // Drop stale invocation before expensive setAgent call
   if (seq !== switchSeq) return;
-  await chatPanel.setAgent(currentAgent as AnyObj, {
+  await chatPanel.setAgent(agent as AnyObj, {
     onApiKeyRequired: async () => true,
   });
 
