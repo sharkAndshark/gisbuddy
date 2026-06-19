@@ -22,10 +22,7 @@ test.describe('Chat with faux LLM', () => {
       await textarea.press('Enter');
 
       await page.waitForSelector('assistant-message', { timeout: 15000 });
-      await page.waitForTimeout(500);
-
-      const msg = page.locator('assistant-message').last();
-      expect(await msg.textContent()).toContain('测试回复');
+      await expect(page.locator('assistant-message').last()).toContainText('测试回复', { timeout: 5000 });
     } finally {
       await cleanupApp(app, tmpDir);
       fs.rmSync(projectDir, { recursive: true, force: true });
@@ -56,7 +53,8 @@ test.describe('Chat with faux LLM', () => {
       await page.waitForSelector('thinking-block', { timeout: 15000 });
       // Click thinking header to expand (thinking content is collapsed by default)
       await page.locator('thinking-block .thinking-header').last().click();
-      await page.waitForTimeout(300);
+      // Wait for markdown-block to render (only present when expanded)
+      await page.waitForSelector('thinking-block markdown-block', { timeout: 5000 });
       const thinkText = await page.locator('thinking-block').last().textContent();
       expect(thinkText).toContain('Step 1');
     } finally {
@@ -84,17 +82,14 @@ test.describe('Chat with faux LLM', () => {
       await textarea.press('Enter');
 
       await page.waitForSelector('assistant-message', { timeout: 15000 });
-      await page.waitForTimeout(500);
-
-      const msg = page.locator('assistant-message').last();
-      expect(await msg.textContent()).toContain('模拟的网络错误');
+      await expect(page.locator('assistant-message').last()).toContainText('模拟的网络错误', { timeout: 5000 });
     } finally {
       await cleanupApp(app, tmpDir);
       fs.rmSync(projectDir, { recursive: true, force: true });
     }
   });
 
-  test('发送消息 → Agent 调用 bash 工具 → 收工具输出', async () => {
+  test('发送消息 → Agent 调用 bash 工具 → 收到工具输出', async () => {
     const projectDir = path.join(os.tmpdir(), 'gisbuddy-e2e-toolchat-' + Date.now());
     const { app, page, tmpDir } = await launchApp({ withProject: projectDir, testMode: true });
 
@@ -116,11 +111,9 @@ test.describe('Chat with faux LLM', () => {
       await textarea.fill('执行命令');
       await textarea.press('Enter');
 
+      // Wait for tool-message and then poll until the actual output appears
       await page.waitForSelector('tool-message', { timeout: 15000 });
-      // Wait for the tool output to render (tool-message shows "Waiting..." initially)
-      await page.waitForTimeout(2000);
-      const toolText = await page.locator('tool-message').last().textContent();
-      expect(toolText).toContain('hello-from-faux-bash');
+      await expect(page.locator('tool-message').last()).toContainText('hello-from-faux-bash', { timeout: 10000 });
     } finally {
       await cleanupApp(app, tmpDir);
       fs.rmSync(projectDir, { recursive: true, force: true });

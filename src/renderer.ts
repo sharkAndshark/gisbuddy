@@ -20,6 +20,7 @@ if (isTestMode) {
     tokensPerSecond: 1000,
   });
   fauxModel = reg.getModel();
+  if (!fauxModel) throw new Error('[GISBuddy] test mode enabled but faux provider failed to register');
   (window as AnyObj).__faux = {
     fauxText, fauxThinking, fauxToolCall, fauxAssistantMessage,
     setResponses: (r: unknown[]) => reg.setResponses(r),
@@ -137,7 +138,9 @@ async function switchToConversation(convId: string) {
   await chatPanel.setAgent(agent as AnyObj, {
     onApiKeyRequired: async () => true,
   });
-  msgListFixUnsub?.();
+  // Drop stale invocation before subscribing
+  if (seq !== switchSeq) return;
+
   msgListFixUnsub = agent.subscribe(async (event: Record<string, unknown>) => {
     if (event.type === 'message_end' || event.type === 'agent_end') {
       const msgList = chatPanel?.querySelector('message-list') as AnyObj;
@@ -145,7 +148,6 @@ async function switchToConversation(convId: string) {
     }
   });
 
-  if (seq !== switchSeq) return;
   renderApp();
 }
 
