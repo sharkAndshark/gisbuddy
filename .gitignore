@@ -9,3 +9,5 @@ _reference/
 
 gdal-bin/
 !gdal-bin/.gitkeep
+test-results/
+playwright-report/

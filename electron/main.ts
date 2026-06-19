@@ -13,7 +13,7 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let conversationManager: ConversationManager | null = null;
 let isQuitting = false;
-let apiKey: string | null = null;
+let apiKey: string | null = process.env.GISBUDDY_API_KEY || null;
 
 // ── Tool execution helpers ──
 
@@ -105,6 +105,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (process.env.GISBUDDY_USER_DATA) {
+    app.setPath('userData', process.env.GISBUDDY_USER_DATA);
+  }
   conversationManager = new ConversationManager(path.join(app.getPath('userData'), 'conversations.json'));
   createWindow();
 });

@@ -16,18 +16,21 @@
     "lint:behaviors": "node scripts/check-behaviors.js behaviors.md --warn",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run tests/integration/",
+    "test:e2e": "npm run build && npx playwright test",
+    "test:all": "npm test && npm run test:e2e",
     "prepare": "husky"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.79.6",
     "@earendil-works/pi-ai": "^0.79.6",
-    "@earendil-works/pi-coding-agent": "^0.79.6",
     "@earendil-works/pi-web-ui": "^0.75.3",
     "fast-xml-parser": "^5.9.0",
     "shapefile": "^0.6.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.0",
     "@types/node": "^22.0.0",
     "electron": "^33.0.0",
     "electron-builder": "^24.0.0",
