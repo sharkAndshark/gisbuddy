@@ -56,24 +56,25 @@ function setupAppStorage(key: string) {
 }
 
 // ── Tools ──
-function createTool(name: string, label: string, desc: string, params: Record<string, unknown>): AgentTool {
-  return {
-    name, label, description: desc, parameters: params as never,
-    execute: async (_id: string, p: unknown) => {
-      if (!currentCwd) throw new Error('No project selected');
-      const res = await gisbuddy.toolExec(name, p, currentCwd);
-      if (!res.success) throw new Error(res.error || 'Tool failed');
-      return res.value as AgentToolResult;
-    },
-  } as AgentTool;
-}
+function createTools(cwd: string): AgentTool[] {
+  function makeTool(name: string, label: string, desc: string, params: Record<string, unknown>): AgentTool {
+    return {
+      name, label, description: desc, parameters: params as never,
+      execute: async (_id: string, p: unknown) => {
+        const res = await gisbuddy.toolExec(name, p, cwd);
+        if (!res.success) throw new Error(res.error || 'Tool failed');
+        return res.value as AgentToolResult;
+      },
+    } as AgentTool;
+  }
 
-const TOOLS: AgentTool[] = [
-  createTool('bash', 'Bash', 'Execute bash command', { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] }),
-  createTool('read', 'Read', 'Read file', { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] }),
-  createTool('write', 'Write', 'Write file', { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] }),
-  createTool('edit', 'Edit', 'Edit file', { type: 'object', properties: { path: { type: 'string' }, oldString: { type: 'string' }, newString: { type: 'string' } }, required: ['path', 'oldString', 'newString'] }),
-];
+  return [
+    makeTool('bash', 'Bash', 'Execute bash command', { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] }),
+    makeTool('read', 'Read', 'Read file', { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] }),
+    makeTool('write', 'Write', 'Write file', { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] }),
+    makeTool('edit', 'Edit', 'Edit file', { type: 'object', properties: { path: { type: 'string' }, oldString: { type: 'string' }, newString: { type: 'string' } }, required: ['path', 'oldString', 'newString'] }),
+  ];
+}
 
 const SYSTEM_PROMPT = 'You are GISBuddy, a helpful GIS data processing assistant. You have tools to execute bash commands, read files, write files, and edit files.';
 
@@ -87,20 +88,24 @@ async function switchToConversation(convId: string) {
   if (!project) return;
 
   currentConvId = convId;
+  currentProjectId = conv.projectId;
   currentCwd = project.folderPath;
 
-  // Create fresh Agent for this conversation
+  // Create fresh Agent with tools bound to this project's cwd
   const seq = ++switchSeq;
   currentAgent = new Agent({
     initialState: {
       systemPrompt: SYSTEM_PROMPT,
       model: getModel('deepseek', 'deepseek-v4-pro'),
-      tools: TOOLS,
+      tools: createTools(currentCwd),
     },
     getApiKey: async () => apiKey,
   });
 
-  chatPanel = document.createElement('pi-chat-panel') as ChatPanel;
+  // Reuse ChatPanel element, only update the agent
+  if (!chatPanel) {
+    chatPanel = document.createElement('pi-chat-panel') as ChatPanel;
+  }
   await chatPanel.setAgent(currentAgent as AnyObj, {
     onApiKeyRequired: async () => true,
   });
@@ -238,6 +243,11 @@ function renderApp() {
 async function initApp() {
   const app = document.getElementById('app');
   if (!app) throw new Error('App container not found');
+
+  // Catch async errors from sidebar click handlers etc.
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('[GISBuddy] unhandled rejection:', e.reason);
+  });
 
   render(html`<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#888;">GISBuddy loading...</div>`, app);
 
