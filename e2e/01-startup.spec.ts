@@ -62,7 +62,7 @@ test.describe('App 启动', () => {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
 
       // Sidebar should contain the project name
-      const sidebar = page.locator('div[style*="width:240px"]');
+      const sidebar = page.locator('[data-testid="sidebar"]');
       const sidebarText = await sidebar.textContent();
       expect(sidebarText).toContain(path.basename(projectDir));
 

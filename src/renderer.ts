@@ -148,6 +148,7 @@ async function handleSelectProject(projectId: string) {
 async function handleNewConversation(projectId: string) {
   const newConv = await gisbuddy.createConversation(projectId);
   if (!newConv) {
+    currentConvId = null;
     renderApp();
     return;
   }
@@ -178,7 +179,7 @@ function renderSidebar() {
   const projectConvs = currentProjectId ? conversations.filter(c => c.projectId === currentProjectId) : [];
 
   return html`
-    <div style="width:240px;height:100vh;border-right:1px solid #e0e0e0;display:flex;flex-direction:column;background:#fafafa;font-family:system-ui,sans-serif;">
+    <div data-testid="sidebar" style="width:240px;height:100vh;border-right:1px solid #e0e0e0;display:flex;flex-direction:column;background:#fafafa;font-family:system-ui,sans-serif;">
       <!-- Header -->
       <div style="padding:12px 16px;border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:14px;font-weight:600;color:#333;">GISBuddy</span>
