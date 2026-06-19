@@ -6,7 +6,7 @@
   "type": "module",
   "main": "dist/electron/main.js",
   "scripts": {
-    "build": "tsc && tsc -p electron/tsconfig.preload.json",
+    "build": "tsc && tsc -p electron/tsconfig.preload.json && mv dist/electron/preload.js dist/electron/preload.cjs && node scripts/build-renderer.mjs",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron .",
     "pack": "electron-builder --dir",
@@ -16,19 +16,25 @@
     "lint:behaviors": "node scripts/check-behaviors.js behaviors.md --warn",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run tests/integration/",
+    "test:e2e": "npm run build && npx playwright test",
+    "test:all": "npm test && npm run test:e2e",
     "prepare": "husky"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.79.6",
     "@earendil-works/pi-ai": "^0.79.6",
+    "@earendil-works/pi-web-ui": "^0.75.3",
     "fast-xml-parser": "^5.9.0",
     "shapefile": "^0.6.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.0",
     "@types/node": "^22.0.0",
     "electron": "^33.0.0",
     "electron-builder": "^24.0.0",
+    "esbuild": "^0.28.1",
     "eslint": "^10.5.0",
     "husky": "^9.1.7",
     "sharp": "^0.35.1",
@@ -45,7 +51,7 @@
     "icon": "build/icon-duck.icns",
     "files": [
       "dist/**/*",
-      "src/**/*",
+      "src/index.html",
       "package.json"
     ],
     "extraResources": [

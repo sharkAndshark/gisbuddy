@@ -83,7 +83,7 @@ describe('ConversationManager — Conversation CRUD', () => {
     expect(c.id).toBeTruthy();
     expect(c.title).toBe('新对话');
     expect(c.projectId).toBe(p.id);
-    expect(c.messages).toEqual([]);
+    expect(c.sessionId).toBe('');
     expect(c.createdAt).toBeGreaterThan(0);
   });
 
@@ -94,7 +94,7 @@ describe('ConversationManager — Conversation CRUD', () => {
     const found = mgr.get(c.id);
     expect(found).toBeDefined();
     expect(found!.title).toBe('新对话');
-    expect(found!.messages).toEqual([]);
+    expect(found!.sessionId).toBe('');
   });
 
   it('should return undefined for unknown conversation id', () => {
@@ -123,32 +123,34 @@ describe('ConversationManager — Conversation CRUD', () => {
     expect(mgr.get(c2.id)).toBeDefined();
   });
 
-  it('should return empty messages for a new conversation', () => {
+  it('should have sessionId field on new conversation', () => {
     const mgr = freshManager();
     const p = mgr.createProject('/data/p');
     const c = mgr.create(p.id);
-    expect(mgr.getMessages(c.id)).toEqual([]);
+    expect(c.sessionId).toBe('');
   });
 
-  it('should return empty messages for unknown conversation', () => {
-    const mgr = freshManager();
-    expect(mgr.getMessages('nope')).toEqual([]);
-  });
-
-  it('should return all conversations without messages field', () => {
+  it('should set and get sessionId', () => {
     const mgr = freshManager();
     const p = mgr.createProject('/data/p');
     const c = mgr.create(p.id);
-    // push a message into the stored conversation (simulating chat)
-    const raw = mgr.get(c.id)!;
-    raw.messages.push({ role: 'user', content: 'hello' });
+    mgr.setSessionId(c.id, 'abc-123');
+    expect(mgr.get(c.id)!.sessionId).toBe('abc-123');
+  });
+
+  it('should return all conversations without legacy messages field', () => {
+    const mgr = freshManager();
+    const p = mgr.createProject('/data/p');
+    mgr.create(p.id);
 
     const all = mgr.getAll();
     expect(all).toHaveLength(1);
     expect(all[0]).not.toHaveProperty('messages');
+    expect(all[0]).not.toHaveProperty('legacyMessages');
     expect(all[0]).toHaveProperty('id');
     expect(all[0]).toHaveProperty('title');
     expect(all[0]).toHaveProperty('projectId');
+    expect(all[0]).toHaveProperty('sessionId');
   });
 });
 

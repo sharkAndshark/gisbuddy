@@ -3,124 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https://*.tile.openstreetmap.org;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net node:; img-src 'self' data: https://*.tile.openstreetmap.org; script-src 'self' 'unsafe-inline' 'unsafe-eval' node:; style-src 'self' 'unsafe-inline'; font-src 'self' data:;">
   <title>GISBuddy</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body { margin: 0; padding: 0; overflow: hidden; }
+    #app { width: 100vw; height: 100vh; }
+  </style>
 </head>
 <body>
-  <div id="app" class="app">
-    <div class="titlebar">
-      <button id="avatar-btn" class="avatar-btn" title="个人资料"></button>
-    </div>
-
-    <div class="app-body">
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <div class="sidebar-title">对话列表</div>
-          <button id="new-conv-btn" class="new-conv-btn" title="新建项目">+项目</button>
-        </div>
-        <div id="conv-list" class="conv-list"></div>
-        <div class="sidebar-footer">
-          <button id="settings-btn" class="sidebar-settings-btn">⚙️ 设置</button>
-        </div>
-      </aside>
-
-      <div class="main-content">
-        <div class="tab-bar" id="tab-bar"></div>
-
-        <main id="chat-container" class="chat-container">
-          <div class="welcome" id="welcome">
-            <div class="welcome-icon">🌍</div>
-            <h2>你好！我是 GISBuddy</h2>
-            <p>选择一个对话，或新建一个对话开始处理 GIS 数据</p>
-            <div class="suggestions">
-              <button class="suggestion" data-msg="查看当前目录有哪些文件">📂 查看目录文件</button>
-              <button class="suggestion" data-msg="用 gdalinfo 查看 data.tif 的信息">🔍 探查栅格数据</button>
-              <button class="suggestion" data-msg="把 data.shp 转换成 GeoJSON">🔄 格式转换</button>
-              <button class="suggestion" data-msg="用 gdalwarp 把数据重投影到 EPSG:4326">🗺️ 重投影</button>
-            </div>
-          </div>
-        </main>
-
-        <div id="file-view" class="file-view hidden"></div>
-
-        <footer class="input-area">
-          <div class="input-wrapper">
-            <textarea id="input" rows="1" placeholder="选择一个对话后开始..." disabled></textarea>
-            <button id="send-btn" class="send-btn" disabled>发送</button>
-          </div>
-        </footer>
-      </div>
-
-      <aside class="file-panel">
-        <div id="file-list" class="file-list"></div>
-      </aside>
-    </div>
-  </div>
-
-  <div id="profile-modal" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3>个人资料</h3>
-        <button id="profile-close" class="icon-btn">✕</button>
-      </div>
-      <div class="modal-body">
-        <label for="profile-username">用户名</label>
-        <input type="text" id="profile-username" placeholder="输入用户名" maxlength="20" />
-        <label style="margin-top:16px;display:block">头像</label>
-        <div class="avatar-picker" id="avatar-picker">
-          <button class="avatar-option">🌍</button>
-          <button class="avatar-option">🌎</button>
-          <button class="avatar-option">🌏</button>
-          <button class="avatar-option">🗺️</button>
-          <button class="avatar-option">🏔️</button>
-          <button class="avatar-option">🏖️</button>
-          <button class="avatar-option">🏙️</button>
-          <button class="avatar-option">🌄</button>
-          <button class="avatar-option">🌅</button>
-          <button class="avatar-option">🗾</button>
-          <button class="avatar-option">🏝️</button>
-          <button class="avatar-option">🌋</button>
-          <button class="avatar-option">🏞️</button>
-          <button class="avatar-option">🌲</button>
-          <button class="avatar-option">🌸</button>
-          <button class="avatar-option">🦅</button>
-          <button class="avatar-option">🐉</button>
-          <button class="avatar-option">🐼</button>
-          <button class="avatar-option">🦊</button>
-          <button class="avatar-option">🐬</button>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="profile-cancel" class="btn btn-secondary">取消</button>
-        <button id="profile-save" class="btn btn-primary">保存</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="settings-modal" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3>设置</h3>
-        <button id="settings-close" class="icon-btn">✕</button>
-      </div>
-      <div class="modal-body">
-        <label for="settings-api-key">DeepSeek API Key</label>
-        <input type="password" id="settings-api-key" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
-        <p class="config-hint">可在 <a href="https://platform.deepseek.com/api_keys" target="_blank">platform.deepseek.com</a> 获取</p>
-      </div>
-      <div class="modal-footer">
-        <button id="settings-cancel" class="btn btn-secondary">取消</button>
-        <button id="settings-save" class="btn btn-primary">保存</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js"></script>
+  <div id="app"></div>
+  <script>
+    window.addEventListener('error', function(e) {
+      document.getElementById('app').innerHTML = '<pre style="color:red;padding:20px;">FATAL: ' + e.message + '\n' + (e.error && e.error.stack || '') + '</pre>';
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      console.error('Unhandled rejection:', e.reason);
+    });
+  </script>
+  <script src="../dist/renderer/bundle.js"></script>
 </body>
 </html>

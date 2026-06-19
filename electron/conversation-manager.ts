@@ -14,9 +14,9 @@ export interface Conversation {
   id: string;
   title: string;
   projectId: string;
+  sessionId: string;
   createdAt: number;
   updatedAt: number;
-  messages: unknown[];
 }
 
 export class ConversationManager {
@@ -35,7 +35,18 @@ export class ConversationManager {
         const raw = fs.readFileSync(this.filePath, 'utf-8');
         const parsed = JSON.parse(raw);
         this.projects = (parsed.projects || []) as Project[];
-        this.conversations = (parsed.conversations || []) as Conversation[];
+        const rawConvs = (parsed.conversations || []) as Record<string, unknown>[];
+        // Normalize: migrate legacy messages to sessionId-less conversations
+        // and strip any messages/legacyMessages fields
+        for (const c of rawConvs) {
+          if (!c.sessionId) {
+            c.sessionId = '';
+          }
+          delete c.messages;
+          delete c.legacyMessages;
+          delete c.sessionPath;
+        }
+        this.conversations = rawConvs as unknown as Conversation[];
       }
     } catch (err) {
       console.warn('[ConversationManager] failed to load, starting fresh:', err);
@@ -113,7 +124,7 @@ export class ConversationManager {
   // ── Conversation methods ──
 
   getAll() {
-    return this.conversations.map(({ messages: _m, ...rest }) => rest);
+    return [...this.conversations];
   }
 
   get(id: string): Conversation | undefined {
@@ -125,9 +136,9 @@ export class ConversationManager {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       title: '新对话',
       projectId,
+      sessionId: '', // filled after AgentSession is created
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      messages: [],
     };
     this.conversations.unshift(conv);
     this.save();
@@ -148,7 +159,12 @@ export class ConversationManager {
     }
   }
 
-  getMessages(id: string): unknown[] {
-    return this.get(id)?.messages || [];
+  setSessionId(id: string, sessionId: string) {
+    const conv = this.get(id);
+    if (conv) {
+      conv.sessionId = sessionId;
+      conv.updatedAt = Date.now();
+      this.save();
+    }
   }
 }
