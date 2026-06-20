@@ -31,4 +31,8 @@ await esbuild.build({
   sourcemap: true,
 });
 
+// Copy Leaflet CSS and icon images from npm package
+fs.copyFileSync('node_modules/leaflet/dist/leaflet.css', 'dist/renderer/leaflet.css');
+fs.cpSync('node_modules/leaflet/dist/images', 'dist/renderer/images', { recursive: true });
+
 console.log('Renderer bundled successfully');

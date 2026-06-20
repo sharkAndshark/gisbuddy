@@ -3,6 +3,7 @@ import { getModel } from '@earendil-works/pi-ai';
 import { ChatPanel, AppStorage, IndexedDBStorageBackend, ProviderKeysStore, SessionsStore, SettingsStore, setAppStorage, getAppStorage } from '@earendil-works/pi-web-ui';
 import { registerFauxProvider, fauxAssistantMessage, fauxText, fauxToolCall, fauxThinking } from '@earendil-works/pi-ai/faux';
 import { html, render } from 'lit';
+import L from 'leaflet';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 console.log('[GISBuddy] bundle.js loaded');
@@ -260,7 +261,7 @@ async function handleDeleteConversation(convId: string) {
   const conv = conversations.find(c => c.id === convId);
   await gisbuddy.deleteConversation(convId);
   // Clean up persisted session data
-  if (conv?.sessionId && !isTestMode) {
+  if (conv?.sessionId) {
     try { await getAppStorage().sessions.deleteSession(conv.sessionId); }
     catch { /* IndexedDB may fail */ }
   }
@@ -405,8 +406,6 @@ function handleCloseFile() {
 }
 
 function initMap(geojson: string) {
-  const L = (window as AnyObj).L;
-  if (!L) return;
   const mapEl = document.getElementById('gisbuddy-map');
   if (!mapEl) return;
   const map = L.map(mapEl, { zoomControl: true });
@@ -545,6 +544,7 @@ async function initApp() {
   }
 
   setupAppStorage(apiKey);
+  if (isTestMode) (window as AnyObj).__storage = getAppStorage();
 
   projects = await gisbuddy.getProjects();
   conversations = await gisbuddy.getConversations();
