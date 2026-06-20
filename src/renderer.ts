@@ -202,12 +202,13 @@ async function switchToConversation(convId: string) {
         const firstReply = agent.state.messages.find((m: AnyObj) => m.role === 'assistant');
         if (firstReply) {
           const textBlock = firstReply.content.find((b: AnyObj) => b.type === 'text');
-          if (textBlock) {
+            if (textBlock) {
             const title = textBlock.text.slice(0, 30);
-            conv.title = title;
-            try { await gisbuddy.renameConversation(convId, title); }
-            catch { /* IPC may fail */ }
-            renderApp();
+            try {
+              await gisbuddy.renameConversation(convId, title);
+              conv.title = title;
+              renderApp();
+            } catch { /* IPC may fail — title stays '新对话', retries next agent_end */ }
           }
         }
       }
@@ -398,19 +399,21 @@ function handleCloseFile() {
 }
 
 function initMap(geojson: string) {
+  const L = (window as AnyObj).L;
+  if (!L) return;
   const mapEl = document.getElementById('gisbuddy-map');
   if (!mapEl) return;
-  const map = (window as AnyObj).L.map(mapEl, { zoomControl: true });
+  const map = L.map(mapEl, { zoomControl: true });
   mapInstance = map;
-  (window as AnyObj).L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
   }).addTo(map);
   let layer: AnyObj;
   try {
     const geo = typeof geojson === 'string' ? JSON.parse(geojson) : geojson;
-    layer = (window as AnyObj).L.geoJSON(geo, {
+    layer = L.geoJSON(geo, {
       pointToLayer: (_f: AnyObj, latlng: AnyObj) =>
-        (window as AnyObj).L.circleMarker(latlng, {
+        L.circleMarker(latlng, {
           radius: 6, fillColor: '#3388ff', color: '#fff', weight: 2, fillOpacity: 0.8,
         }),
     }).addTo(map);
