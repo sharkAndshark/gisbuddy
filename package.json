@@ -25,7 +25,6 @@
     "@earendil-works/pi-agent-core": "^0.79.6",
     "@earendil-works/pi-ai": "^0.79.6",
     "@earendil-works/pi-web-ui": "^0.75.3",
-    "@types/leaflet": "^1.9.21",
     "fast-xml-parser": "^5.9.0",
     "leaflet": "^1.9.4",
     "shapefile": "^0.6.6"
@@ -33,6 +32,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.61.0",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^22.0.0",
     "electron": "^33.0.0",
     "electron-builder": "^24.0.0",

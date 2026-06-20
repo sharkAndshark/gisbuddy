@@ -261,7 +261,7 @@ async function handleDeleteConversation(convId: string) {
   const conv = conversations.find(c => c.id === convId);
   await gisbuddy.deleteConversation(convId);
   // Clean up persisted session data
-  if (conv?.sessionId && !isTestMode) {
+  if (conv?.sessionId) {
     try { await getAppStorage().sessions.deleteSession(conv.sessionId); }
     catch { /* IndexedDB may fail */ }
   }
