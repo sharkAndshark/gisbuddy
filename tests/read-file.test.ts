@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { readFileHandler } from '../electron/handlers/read-file.js';
 
-const TEST_DATA = path.join(process.cwd(), 'test-data');
+const SHAPEFILE_FIXTURES = path.join(__dirname, 'fixtures', 'shapefile');
 
 let tmpDir: string;
 
@@ -22,9 +22,9 @@ function write(name: string, content: string | Buffer): string {
   return p;
 }
 
-// Copy a shapefile component from test-data into tmpDir.
+// Copy a shapefile component from committed fixtures into tmpDir.
 function copyShpComponent(base: string, ext: string): void {
-  const src = path.join(TEST_DATA, base + ext);
+  const src = path.join(SHAPEFILE_FIXTURES, base + ext);
   if (fs.existsSync(src)) fs.copyFileSync(src, path.join(tmpDir, base + ext));
 }
 
