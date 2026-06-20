@@ -6,6 +6,7 @@ import { createBashTool } from '../../electron/tools/bash.tool.js';
 import { createReadTool } from '../../electron/tools/read.tool.js';
 import { createWriteTool } from '../../electron/tools/write.tool.js';
 import { createEditTool } from '../../electron/tools/edit.tool.js';
+import { toolExecHandler } from '../../electron/handlers/tool-exec.js';
 
 let tmpDir: string;
 
@@ -91,5 +92,18 @@ describe('edit 工具', () => {
     const result = await tool.execute('test-9', { path: 'nomatch.txt', oldString: 'MISSING', newString: 'replaced' });
     expect(result.details.found).toBe(false);
     expect(fs.readFileSync(filePath, 'utf-8')).toBe('unchanged content');
+  });
+});
+
+describe('tool-exec dispatch (B43)', () => {
+  it('未知工具名返回错误', async () => {
+    const result = await toolExecHandler('nonexistent', {}, tmpDir);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Unknown tool: nonexistent');
+  });
+
+  it('已知工具名正常执行', async () => {
+    const result = await toolExecHandler('bash', { command: 'echo ok' }, tmpDir);
+    expect(result.success).toBe(true);
   });
 });
