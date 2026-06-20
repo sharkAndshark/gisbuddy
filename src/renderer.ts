@@ -53,7 +53,7 @@ const gisbuddy = (window as unknown as {
 }).gisbuddy;
 
 interface FileEntry { name: string; path: string; isDirectory: boolean; size: number; ext: string; }
-interface FileViewData { type: 'text' | 'image' | 'geojson' | 'error'; content: string; name?: string; message?: string; }
+interface FileViewData { type: 'text' | 'image' | 'geojson' | 'error'; content: string | Record<string, unknown>; name?: string; message?: string; }
 
 // ── Global state ──
 let apiKey = '';
@@ -72,6 +72,7 @@ let fileTreeEntries: FileEntry[] = [];
 let activeFilePath: string | null = null;
 let fileViewData: FileViewData | null = null;
 let mapInstance: AnyObj | null = null;
+let mapRafHandle = 0;
 
 // ── AppStorage (required by pi-web-ui AgentInterface) ──
 function setupAppStorage(key: string) {
@@ -133,6 +134,7 @@ async function switchToConversation(convId: string) {
   currentDir = currentCwd;
   activeFilePath = null;
   fileViewData = null;
+  if (mapRafHandle) { cancelAnimationFrame(mapRafHandle); mapRafHandle = 0; }
   if (mapInstance) { mapInstance.remove(); mapInstance = null; }
 
   // Abort previous Agent to stop any in-flight streaming
@@ -202,7 +204,7 @@ async function switchToConversation(convId: string) {
         const firstReply = agent.state.messages.find((m: AnyObj) => m.role === 'assistant');
         if (firstReply) {
           const textBlock = firstReply.content.find((b: AnyObj) => b.type === 'text');
-            if (textBlock) {
+          if (textBlock) {
             const title = textBlock.text.slice(0, 30);
             try {
               await gisbuddy.renameConversation(convId, title);
@@ -371,6 +373,7 @@ function handleDirClick(dirPath: string) {
 async function handleFileClick(filePath: string) {
   activeFilePath = filePath;
   fileViewData = null;
+  if (mapRafHandle) { cancelAnimationFrame(mapRafHandle); mapRafHandle = 0; }
   if (mapInstance) { mapInstance.remove(); mapInstance = null; }
   renderApp();
   try {
@@ -380,7 +383,7 @@ async function handleFileClick(filePath: string) {
       renderApp();
       // Leaflet map needs a tick to render after DOM update
       if (data.type === 'geojson') {
-        requestAnimationFrame(() => initMap(data.content));
+        mapRafHandle = requestAnimationFrame(() => initMap(data.content));
       }
     }
   } catch {
@@ -394,6 +397,7 @@ async function handleFileClick(filePath: string) {
 function handleCloseFile() {
   activeFilePath = null;
   fileViewData = null;
+  if (mapRafHandle) { cancelAnimationFrame(mapRafHandle); mapRafHandle = 0; }
   if (mapInstance) { mapInstance.remove(); mapInstance = null; }
   renderApp();
 }
