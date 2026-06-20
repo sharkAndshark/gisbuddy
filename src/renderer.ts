@@ -119,6 +119,42 @@ function generateSessionId() {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+async function restoreSession(conv: Conversation): Promise<{ sessionId: string; messages: AnyObj[] }> {
+  let sessionId = conv.sessionId;
+  let messages: AnyObj[] = [];
+
+  if (sessionId && !isTestMode) {
+    try {
+      const saved = await getAppStorage().sessions.loadSession(sessionId);
+      if (saved?.messages?.length) messages = saved.messages;
+    } catch { /* IndexedDB may not be ready */ }
+  }
+
+  if (!sessionId) {
+    sessionId = generateSessionId();
+    conv.sessionId = sessionId;
+    try { await gisbuddy.setConversationSessionId(conv.id, sessionId); }
+    catch { /* IPC may fail */ }
+  }
+
+  return { sessionId, messages };
+}
+
+async function handleAutoTitle(conv: Conversation, agent: Agent) {
+  if (conv.title !== '新对话') return;
+  const firstReply = agent.state.messages.find((m: AnyObj) => m.role === 'assistant');
+  if (!firstReply) return;
+  const textBlock = firstReply.content.find((b: AnyObj) => b.type === 'text');
+  if (!textBlock?.text) return;
+  const title = textBlock.text.slice(0, 30);
+  if (!title) return;
+  try {
+    await gisbuddy.renameConversation(conv.id, title);
+    conv.title = title;
+    renderApp();
+  } catch { /* IPC may fail — title stays '新对话', retries next agent_end */ }
+}
+
 async function switchToConversation(convId: string) {
   if (convId === currentConvId) return;
   const conv = conversations.find(c => c.id === convId);
@@ -143,26 +179,7 @@ async function switchToConversation(convId: string) {
   msgListFixUnsub?.();
   msgListFixUnsub = null;
 
-  // ── Session persistence: restore saved messages, ensure sessionId ──
-  let sessionId = conv.sessionId;
-  let initialMessages: AnyObj[] = [];
-
-  if (sessionId && !isTestMode) {
-    try {
-      const saved = await getAppStorage().sessions.loadSession(sessionId);
-      if (saved?.messages?.length) {
-        initialMessages = saved.messages;
-      }
-    } catch { /* IndexedDB may not be ready */ }
-  }
-
-  // Ensure every conversation has a sessionId for persistence
-  if (!sessionId) {
-    sessionId = generateSessionId();
-    conv.sessionId = sessionId;
-    try { await gisbuddy.setConversationSessionId(convId, sessionId); }
-    catch { /* IPC may fail */ }
-  }
+  const { sessionId, messages: initialMessages } = await restoreSession(conv);
 
   // Create fresh Agent with tools bound to this project's cwd
   const agent = new Agent({
@@ -194,26 +211,11 @@ async function switchToConversation(convId: string) {
       const msgList = chatPanel?.querySelector('message-list') as AnyObj;
       if (msgList) msgList.messages = [...(agent.state.messages)];
     }
-    // Persist session after each run (skip test mode to avoid saving faux data)
     if (event.type === 'agent_end' && sessionId && !isTestMode) {
       try {
         await getAppStorage().sessions.saveSession(sessionId, agent.state);
       } catch { /* IndexedDB save may fail */ }
-      // Auto-title from first assistant message
-      if (conv.title === '新对话') {
-        const firstReply = agent.state.messages.find((m: AnyObj) => m.role === 'assistant');
-        if (firstReply) {
-          const textBlock = firstReply.content.find((b: AnyObj) => b.type === 'text');
-          if (textBlock) {
-            const title = textBlock.text.slice(0, 30);
-            try {
-              await gisbuddy.renameConversation(convId, title);
-              conv.title = title;
-              renderApp();
-            } catch { /* IPC may fail — title stays '新对话', retries next agent_end */ }
-          }
-        }
-      }
+      await handleAutoTitle(conv, agent);
     }
   });
 
