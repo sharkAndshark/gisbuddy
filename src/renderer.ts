@@ -5,6 +5,7 @@ import { registerFauxProvider, fauxAssistantMessage, fauxText, fauxToolCall, fau
 import { html, render } from 'lit';
 import L from 'leaflet';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
+import { generateSessionId, computeAutoTitle, formatFileSize, parentDir } from './renderer-helpers.js';
 
 console.log('[GISBuddy] bundle.js loaded');
 
@@ -116,10 +117,6 @@ const SYSTEM_PROMPT = 'You are GISBuddy, a helpful GIS data processing assistant
 // ── Chat panel management ──
 let switchSeq = 0;
 
-function generateSessionId() {
-  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 async function restoreSession(conv: Conversation): Promise<{ sessionId: string; messages: AnyObj[] }> {
   let sessionId = conv.sessionId;
   let messages: AnyObj[] = [];
@@ -143,11 +140,7 @@ async function restoreSession(conv: Conversation): Promise<{ sessionId: string; 
 
 async function handleAutoTitle(conv: Conversation, agent: Agent) {
   if (conv.title !== '新对话') return;
-  const firstReply = agent.state.messages.find((m: AnyObj) => m.role === 'assistant');
-  if (!firstReply) return;
-  const textBlock = firstReply.content.find((b: AnyObj) => b.type === 'text');
-  if (!textBlock?.text) return;
-  const title = textBlock.text.slice(0, 30);
+  const title = computeAutoTitle(agent.state.messages);
   if (!title) return;
   try {
     await gisbuddy.renameConversation(conv.id, title);
@@ -347,12 +340,6 @@ const FILE_ICONS: Record<string, string> = {
   '.jpg': '🖼️', '.jpeg': '🖼️', '.png': '🖼️',
 };
 
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 async function refreshFileTree(dir?: string) {
   if (dir !== undefined) currentDir = dir;
   if (!currentDir) return;
@@ -362,11 +349,6 @@ async function refreshFileTree(dir?: string) {
     fileTreeEntries = [];
   }
   renderApp();
-}
-
-function parentDir(filePath: string) {
-  const i = filePath.lastIndexOf('/');
-  return i > 0 ? filePath.slice(0, i) : '/';
 }
 
 function handleDirClick(dirPath: string) {
