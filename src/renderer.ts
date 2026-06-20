@@ -201,21 +201,21 @@ async function switchToConversation(convId: string) {
       if (conv.title === '新对话') {
         const firstReply = agent.state.messages.find((m: AnyObj) => m.role === 'assistant');
         if (firstReply) {
-          const text = firstReply.content.find((b: AnyObj) => b.type === 'text');
-          if (text) {
-            const title = text.text.slice(0, 30);
+          const textBlock = firstReply.content.find((b: AnyObj) => b.type === 'text');
+          if (textBlock) {
+            const title = textBlock.text.slice(0, 30);
             conv.title = title;
             try { await gisbuddy.renameConversation(convId, title); }
             catch { /* IPC may fail */ }
-  renderApp();
-  refreshFileTree(); // async, re-renders when entries arrive
-}
+            renderApp();
+          }
         }
       }
     }
   });
 
   renderApp();
+  refreshFileTree();
 }
 
 // ── Actions ──
@@ -401,6 +401,7 @@ function initMap(geojson: string) {
   const mapEl = document.getElementById('gisbuddy-map');
   if (!mapEl) return;
   const map = (window as AnyObj).L.map(mapEl, { zoomControl: true });
+  mapInstance = map;
   (window as AnyObj).L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
   }).addTo(map);
@@ -414,6 +415,8 @@ function initMap(geojson: string) {
         }),
     }).addTo(map);
   } catch {
+    map.remove();
+    mapInstance = null;
     return;
   }
   if (layer.getLayers().length > 0) {
@@ -421,8 +424,7 @@ function initMap(geojson: string) {
   } else {
     map.setView([0, 0], 2);
   }
-  setTimeout(() => map.invalidateSize(), 0);
-  mapInstance = map;
+  requestAnimationFrame(() => map.invalidateSize());
 }
 
 function renderFileTree() {
