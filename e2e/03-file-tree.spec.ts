@@ -15,10 +15,9 @@ test.describe('File tree', () => {
 
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
 
-      // File tree should show entries (may need a refresh via conversation switch)
-      // The tree should show hello.txt, data.json, and subdir directory
-      const treeText = await page.locator('text=hello.txt').count();
-      expect(treeText).toBeGreaterThan(0);
+      // Wait for file tree to load (refreshFileTree is async after renderApp)
+      await page.waitForSelector('text=hello.txt', { timeout: 10000 });
+
       expect(await page.locator('text=data.json').count()).toBeGreaterThan(0);
       expect(await page.locator('text=subdir').count()).toBeGreaterThan(0);
     } finally {
