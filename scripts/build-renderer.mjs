@@ -31,4 +31,7 @@ await esbuild.build({
   sourcemap: true,
 });
 
+// Copy Leaflet CSS from npm package so index.html can reference it
+fs.copyFileSync('node_modules/leaflet/dist/leaflet.css', 'dist/renderer/leaflet.css');
+
 console.log('Renderer bundled successfully');
