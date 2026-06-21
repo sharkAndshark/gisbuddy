@@ -77,7 +77,7 @@ let mapInstance: AnyObj | null = null;
 let mapRafHandle = 0;
 
 // ── AppStorage (required by pi-web-ui AgentInterface) ──
-function setupAppStorage(key: string) {
+async function setupAppStorage(key: string) {
   const settings = new SettingsStore();
   const providerKeys = new ProviderKeysStore();
   const sessions = new SessionsStore();
@@ -88,7 +88,7 @@ function setupAppStorage(key: string) {
   sessions.setBackend(backend);
   const storage = new AppStorage(settings, providerKeys, sessions, undefined as AnyObj, backend);
   setAppStorage(storage);
-  providerKeys.set('deepseek', key).catch(console.error);
+  await providerKeys.set('deepseek', key);
 }
 
 // ── Tools ──
@@ -105,14 +105,12 @@ function createTools(cwd: string): AgentTool[] {
   }
 
   return [
-    makeTool('bash', 'Bash', 'Execute bash command', { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] }),
-    makeTool('read', 'Read', 'Read file', { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] }),
-    makeTool('write', 'Write', 'Write file', { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] }),
-    makeTool('edit', 'Edit', 'Edit file', { type: 'object', properties: { path: { type: 'string' }, oldString: { type: 'string' }, newString: { type: 'string' } }, required: ['path', 'oldString', 'newString'] }),
+    makeTool('bash', 'Bash', 'Execute shell command in the project working directory. Use ls to list files, gdalinfo/ogrinfo to inspect geospatial data.', { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] }),
+    makeTool('read', 'Read', 'Read file content. Path is relative to the project working directory.', { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] }),
+    makeTool('write', 'Write', 'Write file content. Path is relative to the project working directory.', { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] }),
+    makeTool('edit', 'Edit', 'Edit file by replacing oldString with newString. Path is relative to the project working directory.', { type: 'object', properties: { path: { type: 'string' }, oldString: { type: 'string' }, newString: { type: 'string' } }, required: ['path', 'oldString', 'newString'] }),
   ];
 }
-
-const SYSTEM_PROMPT = 'You are GISBuddy, a helpful GIS data processing assistant. You have tools to execute bash commands, read files, write files, and edit files.';
 
 // ── Chat panel management ──
 let switchSeq = 0;
@@ -124,7 +122,16 @@ async function restoreSession(conv: Conversation): Promise<{ sessionId: string; 
   if (sessionId && !isTestMode) {
     try {
       const saved = await getAppStorage().sessions.loadSession(sessionId);
-      if (saved?.messages?.length) messages = saved.messages;
+      if (saved?.messages?.length) {
+        // Filter out error/aborted messages — they are not useful to restore
+        // and can confuse the UI (e.g. stale "Connection error" from a previous run)
+        messages = saved.messages.filter((m: AnyObj) => {
+          if (m.role === 'assistant' && (m.stopReason === 'error' || m.stopReason === 'aborted')) {
+            return false;
+          }
+          return true;
+        });
+      }
     } catch { /* IndexedDB may not be ready */ }
   }
 
@@ -176,9 +183,21 @@ async function switchToConversation(convId: string) {
   const { sessionId, messages: initialMessages } = await restoreSession(conv);
 
   // Create fresh Agent with tools bound to this project's cwd
+  const systemPrompt = `You are GISBuddy, a helpful GIS data processing assistant.
+
+The user's project working directory is: ${currentCwd}
+
+You have these tools:
+- bash: Execute shell commands (use "ls" to list files, "gdalinfo"/"ogrinfo" to inspect geospatial data)
+- read: Read a file (path is relative to the working directory)
+- write: Write a file (path is relative to the working directory)
+- edit: Edit a file by string replacement (path is relative to the working directory)
+
+When the user asks about files or data in the directory, ALWAYS use the bash tool with "ls" first to see what files exist. Do not guess file names. Do not use the read tool on directories.`;
+
   const agent = new Agent({
     initialState: {
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt,
       model: fauxModel ?? getModel('deepseek', 'deepseek-v4-pro'),
       tools: createTools(currentCwd),
       messages: initialMessages,
@@ -196,6 +215,7 @@ async function switchToConversation(convId: string) {
   if (seq !== switchSeq) return;
   await chatPanel.setAgent(agent as AnyObj, {
     onApiKeyRequired: async () => true,
+    toolsFactory: () => createTools(currentCwd!),
   });
   // Drop stale invocation before subscribing
   if (seq !== switchSeq) return;
@@ -505,6 +525,69 @@ function renderApp() {
   `, app);
 }
 
+// ── API Key prompt (Electron disables window.prompt) ──
+function promptApiKey(container: HTMLElement): Promise<string | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (value: string | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+
+    const form = document.createElement('form');
+    form.style.cssText = 'display:flex;flex-direction:column;gap:12px;width:360px;max-width:90vw;padding:24px;background:#fff;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.15);font-family:sans-serif;';
+
+    const title = document.createElement('h3');
+    title.textContent = '请输入 DeepSeek API Key';
+    title.style.cssText = 'margin:0;font-size:16px;color:#222;';
+    form.appendChild(title);
+
+    const hint = document.createElement('p');
+    hint.textContent = 'Key 将保存在本地，用于调用 DeepSeek 模型。';
+    hint.style.cssText = 'margin:0;font-size:12px;color:#888;';
+    form.appendChild(hint);
+
+    const input = document.createElement('input');
+    input.type = 'password';
+    input.placeholder = 'sk-...';
+    input.required = true;
+    input.style.cssText = 'padding:8px 10px;border:1px solid #ccc;border-radius:4px;font-size:14px;outline:none;';
+    form.appendChild(input);
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = '取消';
+    cancelBtn.style.cssText = 'padding:6px 12px;border:1px solid #ccc;background:#f5f5f5;border-radius:4px;cursor:pointer;font-size:14px;';
+    cancelBtn.onclick = () => done(null);
+
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'submit';
+    submitBtn.textContent = '保存';
+    submitBtn.style.cssText = 'padding:6px 12px;border:none;background:#2563eb;color:#fff;border-radius:4px;cursor:pointer;font-size:14px;';
+
+    row.appendChild(cancelBtn);
+    row.appendChild(submitBtn);
+    form.appendChild(row);
+
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const v = input.value.trim();
+      if (v) done(v);
+    };
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.4);z-index:9999;';
+    overlay.appendChild(form);
+    container.appendChild(overlay);
+
+    setTimeout(() => input.focus(), 0);
+  });
+}
+
 // ── Init ──
 async function initApp() {
   const app = document.getElementById('app');
@@ -519,13 +602,13 @@ async function initApp() {
 
   apiKey = (await gisbuddy.getApiKey()) || '';
   if (!apiKey) {
-    const key = prompt('请输入 DeepSeek API Key');
+    const key = await promptApiKey(app);
     if (!key) throw new Error('需要配置 API Key');
     await gisbuddy.configure(key);
     apiKey = key;
   }
 
-  setupAppStorage(apiKey);
+  await setupAppStorage(apiKey);
   if (isTestMode) (window as AnyObj).__storage = getAppStorage();
 
   projects = await gisbuddy.getProjects();
