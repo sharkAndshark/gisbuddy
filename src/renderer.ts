@@ -11,6 +11,13 @@ console.log('[GISBuddy] bundle.js loaded');
 
 const isTestMode = typeof process !== 'undefined' && process.env?.GISBUDDY_TEST === '1';
 
+// macOS uses a hidden native titlebar; we provide drag regions in the web content.
+// On Windows/Linux the native titlebar is kept (see electron/main.ts), so drag
+// regions must be no-ops there to avoid changing the layout or behavior.
+const isMac = typeof process !== 'undefined' && process.platform === 'darwin';
+const DRAG = isMac ? '-webkit-app-region:drag;' : '';
+const NO_DRAG = isMac ? '-webkit-app-region:no-drag;' : '';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyObj = any;
 
@@ -301,10 +308,10 @@ function renderSidebar() {
   return html`
     <div data-testid="sidebar" style="width:240px;height:100vh;border-right:1px solid #e0e0e0;display:flex;flex-direction:column;background:#fafafa;font-family:system-ui,sans-serif;">
       <!-- Header -->
-      <div style="padding:12px 16px;border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;">
+      <div style="padding:12px 16px;padding-left:80px;border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;${DRAG}">
         <span style="font-size:14px;font-weight:600;color:#333;">GISBuddy</span>
         <button @click=${handleNewProject}
-          style="border:none;background:#4a90d9;color:white;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;"
+          style="border:none;background:#4a90d9;color:white;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;${NO_DRAG}"
           title="新建项目">+ 项目</button>
       </div>
 
@@ -441,7 +448,7 @@ function renderFileTree() {
   const upOne = currentDir && currentDir !== currentCwd;
   return html`
     <div style="width:220px;height:100vh;border-left:1px solid #e0e0e0;display:flex;flex-direction:column;background:#fafafa;font-family:system-ui,sans-serif;font-size:13px;">
-      <div style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+      <div style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${DRAG}">
         📂 ${currentDir ? currentDir.slice(currentDir.lastIndexOf('/') + 1) || currentDir : '—'}
       </div>
       <div style="flex:1;overflow-y:auto;padding:4px 0;">
@@ -467,13 +474,21 @@ function renderFileTree() {
 
 function renderFileView() {
   if (!activeFilePath) {
-    return chatPanel ?? html`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">选择一个对话</div>`;
+    const inner = chatPanel ?? html`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">选择一个对话</div>`;
+    // On macOS the native titlebar is hidden; the chat panel is a 3rd-party web
+    // component we can't inject drag styles into, so prepend a thin drag strip.
+    return html`
+      <div style="display:flex;flex-direction:column;height:100%;">
+        ${isMac ? html`<div style="height:32px;flex-shrink:0;${DRAG}"></div>` : ''}
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;">${inner}</div>
+      </div>
+    `;
   }
 
   const name = activeFilePath.slice(activeFilePath.lastIndexOf('/') + 1);
   const header = html`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid #e0e0e0;background:#fff;">
-      <button @click=${handleCloseFile} style="border:none;background:none;cursor:pointer;font-size:14px;color:#888;">← 返回</button>
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid #e0e0e0;background:#fff;${DRAG}">
+      <button @click=${handleCloseFile} style="border:none;background:none;cursor:pointer;font-size:14px;color:#888;${NO_DRAG}">← 返回</button>
       <span style="font-size:13px;color:#555;">${name}</span>
     </div>
   `;
