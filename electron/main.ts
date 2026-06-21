@@ -54,7 +54,8 @@ function createTray() {
 }
 
 function createWindow() {
-  if (process.platform === 'darwin') {
+  const isMac = process.platform === 'darwin';
+  if (isMac) {
     app.dock.hide();
   }
 
@@ -64,8 +65,8 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     title: 'GISBuddy',
-    titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 14, y: 13 },
+    titleBarStyle: isMac ? 'hidden' : 'default',
+    ...(isMac ? { trafficLightPosition: { x: 14, y: 13 } } : {}),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
