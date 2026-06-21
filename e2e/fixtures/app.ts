@@ -7,33 +7,40 @@ export interface LaunchOptions {
   /** Project directory name (created inside tmpDir). Pass a path segment, not a full path. */
   withProject?: string;
   testMode?: boolean;
+  /** Override the API key env var (defaults to 'test-fake-key'). */
+  apiKey?: string;
+  /** Reuse an existing tmpDir (for session persistence tests). */
+  userDataDir?: string;
 }
 
 export async function launchApp(opts?: LaunchOptions): Promise<{ app: ElectronApplication; page: Page; tmpDir: string; projectDir?: string }> {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gisbuddy-e2e-'));
+  const tmpDir = opts?.userDataDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'gisbuddy-e2e-'));
   let projectDir: string | undefined;
   if (opts?.withProject) {
     projectDir = path.join(tmpDir, opts.withProject);
     fs.mkdirSync(projectDir, { recursive: true });
     const convPath = path.join(tmpDir, 'conversations.json');
-    fs.writeFileSync(convPath, JSON.stringify({
-        projects: [{
-          id: 'p1',
-          title: opts.withProject,
-          folderPath: projectDir,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        archived: false,
-      }],
-      conversations: [{
-        id: 'c1',
-        title: 'test',
-        projectId: 'p1',
-        sessionId: '',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      }],
-    }));
+    // Don't overwrite if reusing an existing userDataDir (session persistence tests)
+    if (!opts?.userDataDir || !fs.existsSync(convPath)) {
+      fs.writeFileSync(convPath, JSON.stringify({
+          projects: [{
+            id: 'p1',
+            title: opts.withProject,
+            folderPath: projectDir,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          archived: false,
+        }],
+        conversations: [{
+          id: 'c1',
+          title: 'test',
+          projectId: 'p1',
+          sessionId: '',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }],
+      }));
+    }
   }
 
   const app = await electron.launch({
@@ -41,7 +48,7 @@ export async function launchApp(opts?: LaunchOptions): Promise<{ app: ElectronAp
     cwd: process.cwd(),
     env: {
       ...process.env,
-      GISBUDDY_API_KEY: 'test-fake-key',
+      GISBUDDY_API_KEY: opts?.apiKey ?? 'test-fake-key',
       GISBUDDY_USER_DATA: tmpDir,
       ...(opts?.testMode ? { GISBUDDY_TEST: '1' } : {}),
     },
