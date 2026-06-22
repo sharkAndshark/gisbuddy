@@ -24,16 +24,9 @@ await esbuild.build({
     'stream', 'events', 'buffer', 'url', 'http', 'https', 'net', 'tls',
     'zlib', 'querystring', 'assert',
     'node:fs', 'node:path', 'node:os', 'node:crypto', 'node:http',
+    // mistralai's optional dep; renderer never executes the mistral provider path.
+    '@opentelemetry/api',
   ],
-  plugins: [{
-    name: 'faux-provider',
-    setup(build) {
-      build.onResolve({ filter: /^@earendil-works\/pi-ai\/faux$/ }, () => ({
-        path: fs.realpathSync('node_modules/@earendil-works/pi-ai/dist/providers/faux.js'),
-        namespace: 'file',
-      }));
-    },
-  }],
   sourcemap: true,
 });
 

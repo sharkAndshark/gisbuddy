@@ -22,9 +22,10 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.79.6",
-    "@earendil-works/pi-ai": "^0.79.6",
-    "@earendil-works/pi-web-ui": "^0.75.3",
+    "@earendil-works/pi-agent-core": "^0.74.2",
+    "@earendil-works/pi-ai": "^0.74.2",
+    "@earendil-works/pi-coding-agent": "^0.74.2",
+    "@earendil-works/pi-web-ui": "^0.74.2",
     "fast-xml-parser": "^5.9.0",
     "leaflet": "^1.9.4",
     "shapefile": "^0.6.6"

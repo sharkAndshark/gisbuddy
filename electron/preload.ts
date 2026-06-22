@@ -1,4 +1,4 @@
-import { ipcRenderer } from 'electron';
+import { ipcRenderer, type IpcRendererEvent } from 'electron';
 
 declare const window: Record<string, unknown> & typeof globalThis;
 
@@ -22,9 +22,27 @@ window.gisbuddy = {
   renameConversation: (id: string, title: string) => ipcRenderer.invoke('rename-conversation', id, title),
   setConversationSessionId: (id: string, sessionId: string) => ipcRenderer.invoke('set-conversation-session-id', id, sessionId),
 
-  // ── Tool execution bridge ──
-  toolExec: (toolName: string, params: unknown, cwd: string) =>
-    ipcRenderer.invoke('tool-exec', { toolName, params, cwd }),
+  // ── Agent bridge (pi-coding-agent SDK in main) ──
+    agentSwitch: (conversationId: string, cwd: string, sessionFilePath?: string) =>
+      ipcRenderer.invoke('agent:switch', { conversationId, cwd, sessionFilePath }),
+  agentPrompt: (conversationId: string, payload: string) =>
+    ipcRenderer.invoke('agent:prompt', { conversationId, payload }),
+  agentAbort: (conversationId: string) =>
+    ipcRenderer.invoke('agent:abort', conversationId),
+  agentGetState: (conversationId: string) =>
+    ipcRenderer.invoke('agent:get-state', conversationId),
+  agentDispose: (conversationId: string) =>
+    ipcRenderer.invoke('agent:dispose', conversationId),
+  onAgentEvent: (listener: (conversationId: string, event: unknown) => void) => {
+    const handler = (_e: IpcRendererEvent, payload: { conversationId: string; event: unknown }) =>
+      listener(payload.conversationId, payload.event);
+    ipcRenderer.on('agent:event', handler);
+    return () => ipcRenderer.off('agent:event', handler);
+  },
+
+  // ── Test mode (only valid when GISBUDDY_TEST=1) ──
+  fauxSetResponses: (responses: unknown[]) =>
+    ipcRenderer.invoke('faux:set-responses', responses),
 
   // ── File operations ──
   readFile: (filePath: string) => ipcRenderer.invoke('read-file', filePath),
