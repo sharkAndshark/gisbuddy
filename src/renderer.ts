@@ -271,8 +271,7 @@ function renderSidebar() {
   return html`
     <div data-testid="sidebar" style="width:240px;height:100vh;border-right:1px solid #e0e0e0;display:flex;flex-direction:column;background:#fafafa;font-family:system-ui,sans-serif;">
       <!-- Header -->
-      <div @dblclick=${handleDragDblClick} style="padding:12px 16px;${isMac ? 'padding-left:80px;' : ''}border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;${DRAG}">
-        <span style="font-size:14px;font-weight:600;color:#333;">GISBuddy</span>
+      <div @dblclick=${handleDragDblClick} style="padding:12px 16px;${isMac ? 'padding-left:80px;' : ''}border-bottom:1px solid #e0e0e0;display:flex;justify-content:flex-end;align-items:center;${DRAG}">
         <button @click=${handleNewProject}
           style="border:none;background:#4a90d9;color:white;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;${NO_DRAG}"
           title="新建项目">+ 项目</button>
