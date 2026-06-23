@@ -6,6 +6,7 @@ window.gisbuddy = {
   // ── Config ──
   configure: (apiKey: string) => ipcRenderer.invoke('configure', apiKey),
   getApiKey: () => ipcRenderer.invoke('get-api-key'),
+  toggleMaximize: () => ipcRenderer.invoke('toggle-maximize'),
 
   // ── Project management ──
   getProjects: () => ipcRenderer.invoke('get-projects'),

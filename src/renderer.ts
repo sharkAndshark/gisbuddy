@@ -26,6 +26,7 @@ const gisbuddy = (window as unknown as {
   gisbuddy: {
     getApiKey: () => Promise<string | null>;
     configure: (key: string) => Promise<{ success: boolean }>;
+    toggleMaximize: () => Promise<void>;
     getProjects: () => Promise<Project[]>;
     createProject: () => Promise<Project | null>;
     renameProject: (id: string, title: string) => Promise<void>;
@@ -174,6 +175,13 @@ async function switchToConversation(convId: string) {
 }
 
 // ── Actions ──
+// macOS hidden titlebar: double-click on a drag region toggles maximize.
+// On Windows/Linux the native titlebar handles this, so the handler is a no-op.
+function handleDragDblClick() {
+  if (!isMac) return;
+  gisbuddy.toggleMaximize();
+}
+
 async function handleNewProject() {
   const newP = await gisbuddy.createProject();
   if (!newP) {
@@ -263,7 +271,7 @@ function renderSidebar() {
   return html`
     <div data-testid="sidebar" style="width:240px;height:100vh;border-right:1px solid #e0e0e0;display:flex;flex-direction:column;background:#fafafa;font-family:system-ui,sans-serif;">
       <!-- Header -->
-      <div style="padding:12px 16px;${isMac ? 'padding-left:80px;' : ''}border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;${DRAG}">
+      <div @dblclick=${handleDragDblClick} style="padding:12px 16px;${isMac ? 'padding-left:80px;' : ''}border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;${DRAG}">
         <span style="font-size:14px;font-weight:600;color:#333;">GISBuddy</span>
         <button @click=${handleNewProject}
           style="border:none;background:#4a90d9;color:white;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;${NO_DRAG}"
@@ -409,7 +417,7 @@ function renderFileTree() {
   const upOne = currentDir && currentDir !== currentCwd;
   return html`
     <div style="width:220px;height:100vh;border-left:1px solid #e0e0e0;display:flex;flex-direction:column;background:#fafafa;font-family:system-ui,sans-serif;font-size:13px;">
-      <div style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${DRAG}">
+      <div @dblclick=${handleDragDblClick} style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${DRAG}">
         📂 ${currentDir ? currentDir.slice(currentDir.lastIndexOf('/') + 1) || currentDir : '—'}
       </div>
       <div style="flex:1;overflow-y:auto;padding:4px 0;">
@@ -445,7 +453,7 @@ function renderFileView() {
     // component we can't inject drag styles into, so prepend a thin drag strip.
     return html`
       <div style="display:flex;flex-direction:column;height:100%;">
-        ${isMac ? html`<div style="height:32px;flex-shrink:0;${DRAG}"></div>` : ''}
+        ${isMac ? html`<div @dblclick=${handleDragDblClick} style="height:32px;flex-shrink:0;${DRAG}"></div>` : ''}
         <div style="flex:1;min-height:0;display:flex;flex-direction:column;">${inner}</div>
       </div>
     `;
@@ -453,7 +461,7 @@ function renderFileView() {
 
   const name = activeFilePath.slice(activeFilePath.lastIndexOf('/') + 1);
   const header = html`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid #e0e0e0;background:#fff;${DRAG}">
+    <div @dblclick=${handleDragDblClick} style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid #e0e0e0;background:#fff;${DRAG}">
       <button @click=${handleCloseFile} style="border:none;background:none;cursor:pointer;font-size:14px;color:#888;${NO_DRAG}">← 返回</button>
       <span style="font-size:13px;color:#555;">${name}</span>
     </div>

@@ -218,3 +218,16 @@ ipcMain.handle('read-file', (_event, filePath: string) => readFileHandler(filePa
 ipcMain.handle('list-directory', (_event, dirPath: string) => listDirectoryHandler(dirPath));
 
 ipcMain.handle('get-api-key', () => apiKey);
+
+// ── Window control ──
+// macOS with titleBarStyle:'hidden' loses native double-click-to-zoom on the
+// title bar. The renderer's drag regions (–webkit-app-region:drag) only provide
+// dragging, so we expose a manual toggle for double-click handlers.
+ipcMain.handle('toggle-maximize', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
+  }
+});
