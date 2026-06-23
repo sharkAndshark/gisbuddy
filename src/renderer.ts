@@ -6,8 +6,6 @@ import { computeAutoTitle, formatFileSize, parentDir } from './renderer-helpers.
 
 console.log('[GISBuddy] bundle.js loaded');
 
-const isTestMode = typeof process !== 'undefined' && process.env?.GISBUDDY_TEST === '1';
-
 // macOS uses a hidden native titlebar; we provide drag regions in the web content.
 // On Windows/Linux the native titlebar is kept (see electron/main.ts), so drag
 // regions must be no-ops there to avoid changing the layout or behavior.
@@ -152,9 +150,6 @@ async function switchToConversation(convId: string) {
   // Subscribe to agent_end for auto-title. Message rendering is handled by
   // AgentInterface (it subscribes internally via setAgent), so we only need
   // our own subscription for GISBuddy-specific side effects.
-  proxy.subscribe(() => {
-    // handleAutoTitle is triggered on agent_end below via a dedicated subscription
-  });
   proxy.subscribe(async (event: Record<string, unknown>) => {
     if (event.type === 'agent_end') {
       await handleAutoTitle(conv, proxy);

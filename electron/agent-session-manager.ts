@@ -120,11 +120,12 @@ export async function getOrCreateSession(
   }
 
   const sessionFilePath = sm.getSessionFile();
-  sessions.set(opts.conversationId, { session, sessionManager: sm });
-
   if (!sessionFilePath) {
+    // Avoid poisoning the cache with a session that has no backing file.
+    try { session.dispose(); } catch { /* ignore */ }
     throw new Error('SessionManager did not allocate a session file');
   }
+  sessions.set(opts.conversationId, { session, sessionManager: sm });
   return { session, sessionFilePath };
 }
 

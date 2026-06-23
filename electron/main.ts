@@ -6,7 +6,7 @@ import { ConversationManager } from './conversation-manager.js';
 import { readFileHandler } from './handlers/read-file.js';
 import { listDirectoryHandler } from './handlers/list-directory.js';
 import { registerAgentIpc } from './handlers/agent.js';
-import { authStorage, setDefaultModel, disposeSession as disposeSessionById, setSessionDir } from './agent-session-manager.js';
+import { authStorage, setDefaultModel, disposeSession as disposeSessionById, disposeAllSessions, setSessionDir } from './agent-session-manager.js';
 import { ensureFauxRegistered, getFauxModelId } from './faux.js';
 import { getModel } from '@earendil-works/pi-ai';
 
@@ -123,9 +123,15 @@ app.whenReady().then(async () => {
 
   registerAgentIpc(() => mainWindow);
   createWindow();
+}).catch((err) => {
+  console.error('[GISBuddy] startup failed:', err);
 });
 
-app.on('before-quit', () => { isQuitting = true; });
+app.on('before-quit', () => {
+  isQuitting = true;
+  // Best-effort cleanup of AgentSession handles before the process exits.
+  try { disposeAllSessions(); } catch { /* ignore */ }
+});
 app.on('window-all-closed', () => {});
 app.on('activate', () => { mainWindow?.show(); mainWindow?.focus(); });
 

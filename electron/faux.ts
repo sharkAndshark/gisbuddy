@@ -8,9 +8,6 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Any = any;
-
 type FauxModule = {
   registerFauxProvider: (opts?: {
     models?: Array<{ id: string; name?: string; contextWindow?: number; maxTokens?: number }>;
@@ -59,10 +56,6 @@ export async function ensureFauxRegistered(): Promise<FauxRegistration> {
   return registration;
 }
 
-export function getFauxRegistration(): FauxRegistration | null {
-  return registration;
-}
-
 export function getFauxModelId(): string {
   return FAUX_MODEL_ID;
 }
@@ -71,21 +64,4 @@ export function getFauxModelId(): string {
 export function setFauxResponses(responses: unknown[]): void {
   if (!registration) throw new Error('faux provider not registered (call ensureFauxRegistered first)');
   registration.setResponses(responses);
-}
-
-export function appendFauxResponses(responses: unknown[]): void {
-  if (!registration) throw new Error('faux provider not registered');
-  registration.appendResponses(responses);
-}
-
-// Re-export the builder helpers so the test fixture in renderer can construct
-// response payloads through a typed surface; main forwards them as opaque JSON.
-export async function getFauxBuilders() {
-  const mod = await loadFauxModule() as FauxModule & Record<string, Any>;
-  return {
-    fauxAssistantMessage: mod.fauxAssistantMessage,
-    fauxText: mod.fauxText,
-    fauxToolCall: mod.fauxToolCall,
-    fauxThinking: mod.fauxThinking,
-  };
 }
