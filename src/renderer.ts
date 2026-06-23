@@ -291,8 +291,13 @@ function renderSidebar() {
               <span>📁</span>
               <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${project.title}</span>
               <button
+                @click=${(e: Event) => { e.stopPropagation(); handleNewConversation(project.id); }}
+                class="project-action-btn"
+                style="border:none;background:none;color:#888;cursor:pointer;font-size:14px;padding:0 4px;line-height:1;${NO_DRAG}"
+                title="新建对话">+</button>
+              <button
                 @click=${(e: Event) => { e.stopPropagation(); handleDeleteProject(project.id); }}
-                class="project-delete-btn"
+                class="project-action-btn"
                 style="border:none;background:none;color:#ccc;cursor:pointer;font-size:11px;padding:0 4px;${NO_DRAG}"
                 title="删除项目">✕</button>
             </div>
@@ -311,10 +316,6 @@ function renderSidebar() {
                       title="删除对话">✕</button>
                   </div>
                 `)}
-                <button
-                  @click=${() => handleNewConversation(project.id)}
-                  style="margin-left:16px;border:none;background:none;color:#999;cursor:pointer;font-size:12px;padding:5px 16px;"
-                >+ 对话</button>
               </div>
             ` : ''}
           </div>
