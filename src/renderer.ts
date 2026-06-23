@@ -24,8 +24,6 @@ interface Conversation { id: string; title: string; projectId: string; sessionId
 
 const gisbuddy = (window as unknown as {
   gisbuddy: {
-    // Legacy tool exec bridge (removed in Phase 4 of issue #14)
-    toolExec: (toolName: string, params: unknown, cwd: string) => Promise<{ success: boolean; value?: unknown; error?: string }>;
     getApiKey: () => Promise<string | null>;
     configure: (key: string) => Promise<{ success: boolean }>;
     getProjects: () => Promise<Project[]>;
