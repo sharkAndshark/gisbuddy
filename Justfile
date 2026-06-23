@@ -20,6 +20,7 @@ build:
 
 # 编译 + 启动（开发模式）
 start: build
+  -@pkill -f "gisbuddy/node_modules/electron/dist/Electron.app" 2>/dev/null || true
   npx electron .
 
 # ── 打包 ────────────────────────────────────────────
