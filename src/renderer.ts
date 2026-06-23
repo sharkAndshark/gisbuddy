@@ -1,15 +1,10 @@
-import { Agent } from '@earendil-works/pi-agent-core';
-import { getModel } from '@earendil-works/pi-ai';
-import { ChatPanel, AppStorage, IndexedDBStorageBackend, ProviderKeysStore, SessionsStore, SettingsStore, setAppStorage, getAppStorage } from '@earendil-works/pi-web-ui';
-import { registerFauxProvider, fauxAssistantMessage, fauxText, fauxToolCall, fauxThinking } from '@earendil-works/pi-ai/faux';
+import { ChatPanel, AppStorage, IndexedDBStorageBackend, ProviderKeysStore, SettingsStore, setAppStorage } from '@earendil-works/pi-web-ui';
 import { html, render } from 'lit';
 import L from 'leaflet';
-import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { generateSessionId, computeAutoTitle, formatFileSize, parentDir } from './renderer-helpers.js';
+import { AgentProxy, type AgentStateSnapshot } from './agent-proxy.js';
+import { computeAutoTitle, formatFileSize, parentDir } from './renderer-helpers.js';
 
 console.log('[GISBuddy] bundle.js loaded');
-
-const isTestMode = typeof process !== 'undefined' && process.env?.GISBUDDY_TEST === '1';
 
 // macOS uses a hidden native titlebar; we provide drag regions in the web content.
 // On Windows/Linux the native titlebar is kept (see electron/main.ts), so drag
@@ -21,28 +16,14 @@ const NO_DRAG = isMac ? '-webkit-app-region:no-drag;' : '';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyObj = any;
 
-// ── Faux provider (E2E test mode) ──
-let fauxModel: ReturnType<typeof getModel> | null = null;
-if (isTestMode) {
-  const reg = registerFauxProvider({
-    models: [{ id: 'deepseek-v4-pro', name: 'Faux DeepSeek V4 Pro', contextWindow: 1000000, maxTokens: 384000 }],
-    tokensPerSecond: 1000,
-  });
-  fauxModel = reg.getModel();
-  if (!fauxModel) throw new Error('[GISBuddy] test mode enabled but faux provider failed to register');
-  (window as AnyObj).__faux = {
-    fauxText, fauxThinking, fauxToolCall, fauxAssistantMessage,
-    setResponses: (r: unknown[]) => reg.setResponses(r),
-  };
-  console.log('[GISBuddy] test mode: faux provider registered');
-}
+// Faux provider now lives in the main process (electron/faux.ts); the renderer
+// drives it through `gisbuddy.fauxSetResponses` over IPC. No window.__faux export.
 
 interface Project { id: string; title: string; folderPath: string; createdAt: number; archived: boolean }
 interface Conversation { id: string; title: string; projectId: string; sessionId: string }
 
 const gisbuddy = (window as unknown as {
   gisbuddy: {
-    toolExec: (toolName: string, params: unknown, cwd: string) => Promise<{ success: boolean; value?: AgentToolResult; error?: string }>;
     getApiKey: () => Promise<string | null>;
     configure: (key: string) => Promise<{ success: boolean }>;
     getProjects: () => Promise<Project[]>;
@@ -58,6 +39,14 @@ const gisbuddy = (window as unknown as {
     setConversationSessionId: (id: string, sessionId: string) => Promise<void>;
     listDirectory: (dirPath: string) => Promise<FileEntry[]>;
     readFile: (filePath: string) => Promise<FileViewData>;
+    // Agent bridge (new)
+    agentSwitch: (conversationId: string, cwd: string, sessionFilePath?: string) => Promise<{ sessionId: string; sessionFilePath: string; state: AgentStateSnapshot }>;
+    agentPrompt: (conversationId: string, payload: string) => Promise<AgentStateSnapshot>;
+    agentAbort: (conversationId: string) => Promise<void>;
+    agentGetState: (conversationId: string) => Promise<AgentStateSnapshot | null>;
+    agentDispose: (conversationId: string) => Promise<void>;
+    onAgentEvent: (listener: (conversationId: string, event: unknown) => void) => () => void;
+    fauxSetResponses: (responses: unknown[]) => Promise<void>;
   };
 }).gisbuddy;
 
@@ -72,8 +61,7 @@ let currentProjectId: string | null = null;
 let currentConvId: string | null = null;
 let currentCwd: string | null = null;
 let chatPanel: ChatPanel | null = null;
-let currentAgent: Agent | null = null;
-let msgListFixUnsub: (() => void) | null = null;
+let currentAgent: AgentProxy | null = null;
 
 // ── File tree state ──
 let currentDir = '';
@@ -84,77 +72,27 @@ let mapInstance: AnyObj | null = null;
 let mapRafHandle = 0;
 
 // ── AppStorage (required by pi-web-ui AgentInterface) ──
+// Only SettingsStore + ProviderKeysStore remain in IndexedDB. Sessions moved
+// to main's SessionManager JSONL (issue #14). dbName bumped to v2 to drop the
+// legacy `sessions` object store without an in-place schema migration.
 async function setupAppStorage(key: string) {
   const settings = new SettingsStore();
   const providerKeys = new ProviderKeysStore();
-  const sessions = new SessionsStore();
-  const stores = [settings.getConfig(), providerKeys.getConfig(), sessions.getConfig(), SessionsStore.getMetadataConfig()];
-  const backend = new IndexedDBStorageBackend({ dbName: 'gisbuddy-pi', version: 1, stores: stores as AnyObj });
+  const stores = [settings.getConfig(), providerKeys.getConfig()];
+  const backend = new IndexedDBStorageBackend({ dbName: 'gisbuddy-pi-v2', version: 1, stores: stores as AnyObj });
   settings.setBackend(backend);
   providerKeys.setBackend(backend);
-  sessions.setBackend(backend);
-  const storage = new AppStorage(settings, providerKeys, sessions, undefined as AnyObj, backend);
+  const storage = new AppStorage(settings, providerKeys, undefined as AnyObj, undefined as AnyObj, backend);
   setAppStorage(storage);
   await providerKeys.set('deepseek', key);
-}
-
-// ── Tools ──
-function createTools(cwd: string): AgentTool[] {
-  function makeTool(name: string, label: string, desc: string, params: Record<string, unknown>): AgentTool {
-    return {
-      name, label, description: desc, parameters: params as never,
-      execute: async (_id: string, p: unknown) => {
-        const res = await gisbuddy.toolExec(name, p, cwd);
-        if (!res.success) throw new Error(res.error || 'Tool failed');
-        return res.value as AgentToolResult;
-      },
-    } as AgentTool;
-  }
-
-  return [
-    makeTool('bash', 'Bash', 'Execute shell command in the project working directory. Use ls to list files, gdalinfo/ogrinfo to inspect geospatial data.', { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] }),
-    makeTool('read', 'Read', 'Read file content. Path is relative to the project working directory.', { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] }),
-    makeTool('write', 'Write', 'Write file content. Path is relative to the project working directory.', { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] }),
-    makeTool('edit', 'Edit', 'Edit file by replacing oldString with newString. Path is relative to the project working directory.', { type: 'object', properties: { path: { type: 'string' }, oldString: { type: 'string' }, newString: { type: 'string' } }, required: ['path', 'oldString', 'newString'] }),
-  ];
 }
 
 // ── Chat panel management ──
 let switchSeq = 0;
 
-async function restoreSession(conv: Conversation): Promise<{ sessionId: string; messages: AnyObj[] }> {
-  let sessionId = conv.sessionId;
-  let messages: AnyObj[] = [];
-
-  if (sessionId && !isTestMode) {
-    try {
-      const saved = await getAppStorage().sessions.loadSession(sessionId);
-      if (saved?.messages?.length) {
-        // Filter out error/aborted messages — they are not useful to restore
-        // and can confuse the UI (e.g. stale "Connection error" from a previous run)
-        messages = saved.messages.filter((m: AnyObj) => {
-          if (m.role === 'assistant' && (m.stopReason === 'error' || m.stopReason === 'aborted')) {
-            return false;
-          }
-          return true;
-        });
-      }
-    } catch { /* IndexedDB may not be ready */ }
-  }
-
-  if (!sessionId) {
-    sessionId = generateSessionId();
-    conv.sessionId = sessionId;
-    try { await gisbuddy.setConversationSessionId(conv.id, sessionId); }
-    catch { /* IPC may fail */ }
-  }
-
-  return { sessionId, messages };
-}
-
-async function handleAutoTitle(conv: Conversation, agent: Agent) {
+async function handleAutoTitle(conv: Conversation, proxy: AgentProxy) {
   if (conv.title !== '新对话') return;
-  const title = computeAutoTitle(agent.state.messages);
+  const title = computeAutoTitle(proxy.state.messages as AnyObj[]);
   if (!title) return;
   try {
     await gisbuddy.renameConversation(conv.id, title);
@@ -181,64 +119,54 @@ async function switchToConversation(convId: string) {
   if (mapRafHandle) { cancelAnimationFrame(mapRafHandle); mapRafHandle = 0; }
   if (mapInstance) { mapInstance.remove(); mapInstance = null; }
 
-  // Abort previous Agent to stop any in-flight streaming
+  // Tear down previous AgentProxy: stop IPC subscription and abort any in-flight run.
   const seq = ++switchSeq;
-  try { currentAgent?.abort(); } catch { /* ignore */ }
-  msgListFixUnsub?.();
-  msgListFixUnsub = null;
+  if (currentAgent) {
+    try { await currentAgent.abort(); } catch { /* ignore */ }
+    currentAgent.dispose();
+    currentAgent = null;
+  }
 
-  const { sessionId, messages: initialMessages } = await restoreSession(conv);
+  // Ask main to spin up (or return cached) AgentSession for this conversation.
+  // Main owns tools, model, and system prompt — renderer only mirrors state.
+  // `conv.sessionId` carries the JSONL file path on resume (empty for new).
+  const switched = await gisbuddy.agentSwitch(conv.id, currentCwd, conv.sessionId || undefined);
+  if (seq !== switchSeq) return;
 
-  // Create fresh Agent with tools bound to this project's cwd
-  const systemPrompt = `You are GISBuddy, a helpful GIS data processing assistant.
+  // Persist the JSONL path back to the conversation so the next switch resumes.
+  if (switched.sessionFilePath && switched.sessionFilePath !== conv.sessionId) {
+    conv.sessionId = switched.sessionFilePath;
+    try { await gisbuddy.setConversationSessionId(conv.id, switched.sessionFilePath); }
+    catch { /* IPC may fail — next switch will retry */ }
+  }
 
-The user's project working directory is: ${currentCwd}
+  const proxy = new AgentProxy(conv.id, switched.state);
+  proxy.connect(gisbuddy);
+  currentAgent = proxy;
+  if (seq !== switchSeq) return;
 
-You have these tools:
-- bash: Execute shell commands (use "ls" to list files, "gdalinfo"/"ogrinfo" to inspect geospatial data)
-- read: Read a file (path is relative to the working directory)
-- write: Write a file (path is relative to the working directory)
-- edit: Edit a file by string replacement (path is relative to the working directory)
-
-When the user asks about files or data in the directory, ALWAYS use the bash tool with "ls" first to see what files exist. Do not guess file names. Do not use the read tool on directories.`;
-
-  const agent = new Agent({
-    initialState: {
-      systemPrompt,
-      model: fauxModel ?? getModel('deepseek', 'deepseek-v4-pro'),
-      tools: createTools(currentCwd),
-      messages: initialMessages,
-    },
-    sessionId: isTestMode ? undefined : sessionId,
-    getApiKey: async () => apiKey,
+  // Subscribe to agent_end for auto-title. Message rendering is handled by
+  // AgentInterface (it subscribes internally via setAgent), so we only need
+  // our own subscription for GISBuddy-specific side effects.
+  proxy.subscribe(async (event: Record<string, unknown>) => {
+    if (event.type === 'agent_end') {
+      await handleAutoTitle(conv, proxy);
+    }
   });
-  currentAgent = agent;
 
-  // Reuse ChatPanel element, only update the agent
+  // Reuse ChatPanel element, only update the agent.
   if (!chatPanel) {
     chatPanel = document.createElement('pi-chat-panel') as ChatPanel;
   }
-  // Drop stale invocation before expensive setAgent call
   if (seq !== switchSeq) return;
-  await chatPanel.setAgent(agent as AnyObj, {
+  await chatPanel.setAgent(proxy.asAgent() as AnyObj, {
     onApiKeyRequired: async () => true,
-    toolsFactory: () => createTools(currentCwd!),
+    // toolsFactory intentionally empty — main owns the tool list.
+    // ChatPanel will still inject its `artifacts` tool; that's harmless (no
+    // artifact messages are produced in GISBuddy's flows today).
+    toolsFactory: () => [],
   });
-  // Drop stale invocation before subscribing
   if (seq !== switchSeq) return;
-
-  msgListFixUnsub = agent.subscribe(async (event: Record<string, unknown>) => {
-    if (event.type === 'message_end' || event.type === 'agent_end') {
-      const msgList = chatPanel?.querySelector('message-list') as AnyObj;
-      if (msgList) msgList.messages = [...(agent.state.messages)];
-    }
-    if (event.type === 'agent_end' && sessionId && !isTestMode) {
-      try {
-        await getAppStorage().sessions.saveSession(sessionId, agent.state);
-      } catch { /* IndexedDB save may fail */ }
-      await handleAutoTitle(conv, agent);
-    }
-  });
 
   renderApp();
   refreshFileTree();
@@ -278,13 +206,9 @@ async function handleNewConversation(projectId: string) {
 }
 
 async function handleDeleteConversation(convId: string) {
-  const conv = conversations.find(c => c.id === convId);
   await gisbuddy.deleteConversation(convId);
-  // Clean up persisted session data
-  if (conv?.sessionId) {
-    try { await getAppStorage().sessions.deleteSession(conv.sessionId); }
-    catch { /* IndexedDB may fail */ }
-  }
+  // Main's disposeSession (invoked by the delete-conversation IPC) cleans up
+  // the AgentSession; the JSONL file is retained on disk as history.
   conversations = await gisbuddy.getConversations();
   if (convId === currentConvId) {
     const projectConvs = conversations.filter(c => c.projectId === currentProjectId);
@@ -624,7 +548,6 @@ async function initApp() {
   }
 
   await setupAppStorage(apiKey);
-  if (isTestMode) (window as AnyObj).__storage = getAppStorage();
 
   projects = await gisbuddy.getProjects();
   conversations = await gisbuddy.getConversations();

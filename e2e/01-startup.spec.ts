@@ -26,25 +26,6 @@ test.describe('App 启动', () => {
     }
   });
 
-  test('Tool IPC 桥正常工作', async () => {
-    const { app, page, tmpDir } = await launchApp({ withProject: 'e2e-tool' });
-
-    try {
-      await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
-
-      const result = await page.evaluate(async () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const gisbuddy = (window as any).gisbuddy;
-        return await gisbuddy.toolExec('bash', { command: 'echo e2e-test' }, '/tmp');
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.value.content[0].text).toContain('e2e-test');
-    } finally {
-      await cleanupApp(app, tmpDir);
-    }
-  });
-
   test('侧边栏渲染项目和对话列表', async () => {
     const { app, page, tmpDir } = await launchApp({ withProject: 'e2e-sidebar' });
 

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { launchApp, cleanupApp } from './fixtures/app';
+import { fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall, setFauxResponses } from './fixtures/faux';
 
 test.describe('Chat with faux LLM', () => {
   test('发送消息 → 收到纯文本回复', async () => {
@@ -8,10 +9,9 @@ test.describe('Chat with faux LLM', () => {
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
 
-      await page.evaluate(() => {
-        const f = (window as any).__faux;
-        f.setResponses([f.fauxAssistantMessage([f.fauxText('测试回复')], { stopReason: 'stop' })]);
-      });
+      await setFauxResponses(page, [
+        fauxAssistantMessage([fauxText('测试回复')]),
+      ]);
 
       const textarea = page.locator('textarea').first();
       await textarea.fill('你好');
@@ -30,15 +30,11 @@ test.describe('Chat with faux LLM', () => {
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
 
-      await page.evaluate(() => {
-        const f = (window as any).__faux;
-        f.setResponses([
-          f.fauxAssistantMessage(
-            [f.fauxThinking('Step 1: analyze input. Step 2: formulate answer.'), f.fauxText('最终答案')],
-            { stopReason: 'stop' },
-          ),
-        ]);
-      });
+      await setFauxResponses(page, [
+        fauxAssistantMessage(
+          [fauxThinking('Step 1: analyze input. Step 2: formulate answer.'), fauxText('最终答案')],
+        ),
+      ]);
 
       const textarea = page.locator('textarea').first();
       await textarea.fill('复杂问题');
@@ -62,12 +58,9 @@ test.describe('Chat with faux LLM', () => {
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
 
-      await page.evaluate(() => {
-        const f = (window as any).__faux;
-        f.setResponses([
-          f.fauxAssistantMessage([], { stopReason: 'error', errorMessage: '模拟的网络错误' }),
-        ]);
-      });
+      await setFauxResponses(page, [
+        fauxAssistantMessage([], { stopReason: 'error', errorMessage: '模拟的网络错误' }),
+      ]);
 
       const textarea = page.locator('textarea').first();
       await textarea.fill('触发错误');
@@ -86,16 +79,13 @@ test.describe('Chat with faux LLM', () => {
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
 
-      await page.evaluate(() => {
-        const f = (window as any).__faux;
-        f.setResponses([
-          f.fauxAssistantMessage(
-            [f.fauxToolCall('bash', { command: 'echo hello-from-faux-bash' })],
-            { stopReason: 'toolUse' },
-          ),
-          f.fauxAssistantMessage([f.fauxText('执行完毕')], { stopReason: 'stop' }),
-        ]);
-      });
+      await setFauxResponses(page, [
+        fauxAssistantMessage(
+          [fauxToolCall('bash', { command: 'echo hello-from-faux-bash' })],
+          { stopReason: 'toolUse' },
+        ),
+        fauxAssistantMessage([fauxText('执行完毕')]),
+      ]);
 
       const textarea = page.locator('textarea').first();
       await textarea.fill('执行命令');
