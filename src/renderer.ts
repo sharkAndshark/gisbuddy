@@ -31,6 +31,7 @@ const gisbuddy = (window as unknown as {
     renameProject: (id: string, title: string) => Promise<void>;
     archiveProject: (id: string) => Promise<void>;
     unarchiveProject: (id: string) => Promise<void>;
+    deleteProject: (id: string) => Promise<string[]>;
     getConversations: () => Promise<Conversation[]>;
     createConversation: (projectId: string) => Promise<Conversation | null>;
     deleteConversation: (id: string) => Promise<void>;
@@ -224,6 +225,36 @@ async function handleDeleteConversation(convId: string) {
   }
 }
 
+async function handleDeleteProject(projectId: string) {
+  const project = projects.find(p => p.id === projectId);
+  if (!project) return;
+  const ok = confirm(`确定删除项目「${project.title}」及其所有对话吗？\n（磁盘上的工作文件夹与历史会话文件不会被删除）`);
+  if (!ok) return;
+  await gisbuddy.deleteProject(projectId);
+  // Tear down the current agent if it belonged to the deleted project.
+  if (currentProjectId === projectId) {
+    if (currentAgent) {
+      try { await currentAgent.abort(); } catch { /* ignore */ }
+      currentAgent.dispose();
+      currentAgent = null;
+    }
+    currentConvId = null;
+    currentProjectId = null;
+    currentCwd = null;
+    activeFilePath = null;
+    fileViewData = null;
+    if (mapRafHandle) { cancelAnimationFrame(mapRafHandle); mapRafHandle = 0; }
+    if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+  }
+  projects = await gisbuddy.getProjects();
+  conversations = await gisbuddy.getConversations();
+  if (projects.length > 0) {
+    await handleSelectProject(projects[0].id);
+  } else {
+    renderApp();
+  }
+}
+
 // ── Sidebar rendering ──
 function renderSidebar() {
   const activeProjects = projects.filter(p => !p.archived);
@@ -246,10 +277,16 @@ function renderSidebar() {
             <!-- Project header -->
             <div
               @click=${() => handleSelectProject(project.id)}
+              class="project-row"
               style="padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:${project.id === currentProjectId ? '#4a90d9' : '#555'};display:flex;align-items:center;gap:6px;background:${project.id === currentProjectId ? '#e8f0fe' : 'transparent'};"
             >
               <span>📁</span>
               <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${project.title}</span>
+              <button
+                @click=${(e: Event) => { e.stopPropagation(); handleDeleteProject(project.id); }}
+                class="project-delete-btn"
+                style="border:none;background:none;color:#ccc;cursor:pointer;font-size:11px;padding:0 4px;${NO_DRAG}"
+                title="删除项目">✕</button>
             </div>
             <!-- Conversations under selected project -->
             ${project.id === currentProjectId ? html`
@@ -398,7 +435,12 @@ function renderFileTree() {
 
 function renderFileView() {
   if (!activeFilePath) {
-    const inner = chatPanel ?? html`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">选择一个对话</div>`;
+    // Only show the chat panel when a conversation is actually selected.
+    // After deleting the last project/conversation, currentConvId is null and
+    // the stale chatPanel (a persistent web component) must not be rendered.
+    const inner = (currentConvId && chatPanel)
+      ? chatPanel
+      : html`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">选择一个对话</div>`;
     // On macOS the native titlebar is hidden; the chat panel is a 3rd-party web
     // component we can't inject drag styles into, so prepend a thin drag strip.
     return html`

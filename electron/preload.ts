@@ -13,6 +13,7 @@ window.gisbuddy = {
   renameProject: (id: string, title: string) => ipcRenderer.invoke('rename-project', id, title),
   archiveProject: (id: string) => ipcRenderer.invoke('archive-project', id),
   unarchiveProject: (id: string) => ipcRenderer.invoke('unarchive-project', id),
+  deleteProject: (id: string) => ipcRenderer.invoke('delete-project', id),
   moveConversation: (convId: string, projectId: string) => ipcRenderer.invoke('move-conversation', convId, projectId),
 
   // ── Conversation metadata ──
