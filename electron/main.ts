@@ -21,6 +21,24 @@ let apiKey: string | null = process.env.GISBUDDY_API_KEY || null;
 
 const isTestMode = !!process.env.GISBUDDY_TEST;
 
+// ── Single instance ──
+// Without this, a second launch (e.g. `just start` while the tray-resident
+// first instance is still alive) collides on the IndexedDB LevelDB LOCK file
+// in userData, producing "Failed to open LevelDB database ... LOCK" errors.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  // Another instance owns the lock; bail out immediately.
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // The running instance got a second launch — surface its window.
+    if (mainWindow) {
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 // ── Window & Tray ──
 
 function getIconPath(name: string): string | undefined {
