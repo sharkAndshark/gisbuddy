@@ -72,6 +72,44 @@ describe('ConversationManager — Project CRUD', () => {
     expect(() => mgr.archiveProject('nope')).not.toThrow();
     expect(() => mgr.unarchiveProject('nope')).not.toThrow();
   });
+
+  it('should delete a project and its conversations, returning removed conv ids', () => {
+    const mgr = freshManager();
+    const p1 = mgr.createProject('/data/p1');
+    const p2 = mgr.createProject('/data/p2');
+    const c1 = mgr.create(p1.id);
+    const c2 = mgr.create(p1.id);
+    const c3 = mgr.create(p2.id);
+    expect(mgr.getAll()).toHaveLength(3);
+
+    const removed = mgr.deleteProject(p1.id);
+    expect(removed.sort()).toEqual([c1.id, c2.id].sort());
+    expect(mgr.getProjects()).toHaveLength(1);
+    expect(mgr.getProject(p1.id)).toBeUndefined();
+    expect(mgr.getProject(p2.id)).toBeDefined();
+    // Conversations belonging to p1 are gone; p2's conversation survives.
+    expect(mgr.getAll()).toHaveLength(1);
+    expect(mgr.get(c1.id)).toBeUndefined();
+    expect(mgr.get(c2.id)).toBeUndefined();
+    expect(mgr.get(c3.id)).toBeDefined();
+  });
+
+  it('should return [] and not throw when deleting an unknown project', () => {
+    const mgr = freshManager();
+    expect(mgr.deleteProject('nope')).toEqual([]);
+    expect(() => mgr.deleteProject('nope')).not.toThrow();
+  });
+
+  it('should persist project deletion across reloads', () => {
+    const mgr1 = freshManager();
+    const p = mgr1.createProject('/data/p');
+    mgr1.create(p.id);
+    mgr1.deleteProject(p.id);
+
+    const mgr2 = new ConversationManager(dbPath);
+    expect(mgr2.getProjects()).toEqual([]);
+    expect(mgr2.getAll()).toEqual([]);
+  });
 });
 
 describe('ConversationManager — Conversation CRUD', () => {

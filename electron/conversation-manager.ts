@@ -112,6 +112,21 @@ export class ConversationManager {
     }
   }
 
+  // Permanently remove a project and all of its conversations.
+  // Returns the ids of the deleted conversations so callers can dispose any
+  // associated agent sessions / session files.
+  deleteProject(id: string): string[] {
+    const existed = this.projects.some(p => p.id === id);
+    if (!existed) return [];
+    const removedConvIds = this.conversations
+      .filter(c => c.projectId === id)
+      .map(c => c.id);
+    this.projects = this.projects.filter(p => p.id !== id);
+    this.conversations = this.conversations.filter(c => c.projectId !== id);
+    this.save();
+    return removedConvIds;
+  }
+
   moveConversation(convId: string, projectId: string) {
     const conv = this.conversations.find(c => c.id === convId);
     if (conv) {

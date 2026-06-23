@@ -197,6 +197,16 @@ ipcMain.handle('unarchive-project', (_event, id: string) => {
   conversationManager?.unarchiveProject(id);
 });
 
+ipcMain.handle('delete-project', (_event, id: string) => {
+  const removedConvIds = conversationManager?.deleteProject(id) || [];
+  // Dispose agent sessions for the conversations that were removed so main's
+  // cache doesn't leak. JSONL session files are retained on disk as history.
+  for (const convId of removedConvIds) {
+    try { disposeSessionById(convId); } catch { /* best effort */ }
+  }
+  return removedConvIds;
+});
+
 ipcMain.handle('move-conversation', (_event, convId: string, projectId: string) => {
   conversationManager?.moveConversation(convId, projectId);
 });
