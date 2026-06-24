@@ -37,8 +37,8 @@ test.describe('App 启动', () => {
       const sidebarText = await sidebar.textContent();
       expect(sidebarText).toContain('e2e-sidebar');
 
-      // Sidebar should have +项目 button
-      const newProjectBtn = page.locator('button', { hasText: '+ 项目' });
+      // Sidebar should have + button (new project)
+      const newProjectBtn = page.locator('button.new-project-btn', { hasText: '+' });
       expect(await newProjectBtn.count()).toBeGreaterThan(0);
     } finally {
       await cleanupApp(app, tmpDir);

@@ -269,12 +269,13 @@ function renderSidebar() {
   const projectConvs = currentProjectId ? conversations.filter(c => c.projectId === currentProjectId) : [];
 
   return html`
-    <div data-testid="sidebar" style="width:240px;height:100vh;border-right:1px solid #e0e0e0;display:flex;flex-direction:column;background:#fafafa;font-family:system-ui,sans-serif;">
+    <div data-testid="sidebar" style="width:240px;height:100vh;border-right:1px solid #d8d0c2;display:flex;flex-direction:column;background:#e8e3d8;font-family:system-ui,sans-serif;">
       <!-- Header -->
-      <div @dblclick=${handleDragDblClick} style="padding:12px 16px;${isMac ? 'padding-left:80px;' : ''}display:flex;justify-content:flex-end;align-items:center;${DRAG}">
+      <div @dblclick=${handleDragDblClick} style="${isMac ? 'padding:9px 16px 9px 80px;' : 'padding:12px 16px;'}display:flex;justify-content:flex-end;align-items:center;${DRAG}">
         <button @click=${handleNewProject}
-          style="border:none;background:#4a90d9;color:white;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;${NO_DRAG}"
-          title="新建项目">+ 项目</button>
+          class="new-project-btn"
+          style="border:none;background:none;color:#5a544a;cursor:pointer;font-size:16px;padding:0 4px;line-height:1;${NO_DRAG}"
+          title="新建项目">+</button>
       </div>
 
       <!-- Project & conversation list -->
@@ -285,19 +286,18 @@ function renderSidebar() {
             <div
               @click=${() => handleSelectProject(project.id)}
               class="project-row"
-              style="padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:${project.id === currentProjectId ? '#4a90d9' : '#555'};display:flex;align-items:center;gap:6px;"
+              style="padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:${project.id === currentProjectId ? '#6b7d5e' : '#5a544a'};display:flex;align-items:center;gap:6px;"
             >
-              <span>📁</span>
               <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${project.title}</span>
               <button
                 @click=${(e: Event) => { e.stopPropagation(); handleNewConversation(project.id); }}
                 class="project-action-btn"
-                style="border:none;background:none;color:#888;cursor:pointer;font-size:14px;padding:0 4px;line-height:1;${NO_DRAG}"
+                style="border:none;background:none;color:#7a7468;cursor:pointer;font-size:14px;padding:0 4px;line-height:1;${NO_DRAG}"
                 title="新建对话">+</button>
               <button
                 @click=${(e: Event) => { e.stopPropagation(); handleDeleteProject(project.id); }}
                 class="project-action-btn"
-                style="border:none;background:none;color:#ccc;cursor:pointer;font-size:11px;padding:0 4px;${NO_DRAG}"
+                style="border:none;background:none;color:#a09886;cursor:pointer;font-size:11px;padding:0 4px;${NO_DRAG}"
                 title="删除项目">✕</button>
             </div>
             <!-- Conversations under selected project -->
@@ -306,12 +306,12 @@ function renderSidebar() {
                 ${projectConvs.map(conv => html`
                   <div
                     @click=${() => switchToConversation(conv.id)}
-                    style="padding:5px 16px;cursor:pointer;font-size:12px;color:${conv.id === currentConvId ? '#4a90d9' : '#777'};display:flex;align-items:center;gap:4px;"
+                    style="padding:5px 16px;cursor:pointer;font-size:12px;color:${conv.id === currentConvId ? '#6b7d5e' : '#7a7468'};display:flex;align-items:center;gap:4px;"
                   >
                     <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${conv.title || '新对话'}</span>
                     <button
                       @click=${(e: Event) => { e.stopPropagation(); handleDeleteConversation(conv.id); }}
-                      style="border:none;background:none;color:#ccc;cursor:pointer;font-size:11px;padding:0 2px;"
+                      style="border:none;background:none;color:#a09886;cursor:pointer;font-size:11px;padding:0 2px;"
                       title="删除对话">✕</button>
                   </div>
                 `)}
@@ -322,8 +322,8 @@ function renderSidebar() {
       </div>
 
       <!-- Footer -->
-      <div style="padding:8px 16px;border-top:1px solid #e0e0e0;">
-        <span style="font-size:11px;color:#aaa;">${activeProjects.length} 个项目</span>
+      <div style="padding:8px 16px;border-top:1px solid #d8d0c2;">
+        <span style="font-size:11px;color:#a09886;">${activeProjects.length} 个项目</span>
       </div>
     </div>
   `;
@@ -397,7 +397,7 @@ function initMap(geojson: string) {
     layer = L.geoJSON(geo, {
       pointToLayer: (_f: AnyObj, latlng: AnyObj) =>
         L.circleMarker(latlng, {
-          radius: 6, fillColor: '#3388ff', color: '#fff', weight: 2, fillOpacity: 0.8,
+          radius: 6, fillColor: '#6b7d5e', color: '#ece8de', weight: 2, fillOpacity: 0.8,
         }),
     }).addTo(map);
   } catch {
@@ -416,24 +416,24 @@ function initMap(geojson: string) {
 function renderFileTree() {
   const upOne = currentDir && currentDir !== currentCwd;
   return html`
-    <div style="width:220px;height:100vh;border-left:1px solid #e0e0e0;display:flex;flex-direction:column;background:#fafafa;font-family:system-ui,sans-serif;font-size:13px;">
-      <div @dblclick=${handleDragDblClick} style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${DRAG}">
+    <div style="width:220px;height:100vh;border-left:1px solid #d8d0c2;display:flex;flex-direction:column;background:#e8e3d8;font-family:system-ui,sans-serif;font-size:13px;">
+      <div @dblclick=${handleDragDblClick} style="padding:8px 12px;border-bottom:1px solid #d8d0c2;font-size:11px;color:#7a7468;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${DRAG}">
         📂 ${currentDir ? currentDir.slice(currentDir.lastIndexOf('/') + 1) || currentDir : '—'}
       </div>
       <div style="flex:1;overflow-y:auto;padding:4px 0;">
         ${upOne ? html`
           <div @click=${() => handleDirClick(parentDir(currentDir))}
-            style="padding:4px 12px;cursor:pointer;color:#4a90d9;display:flex;align-items:center;gap:6px;font-size:12px;">
+            style="padding:4px 12px;cursor:pointer;color:#6b7d5e;display:flex;align-items:center;gap:6px;font-size:12px;">
             <span>📁</span><span>..</span>
           </div>
         ` : ''}
         ${fileTreeEntries.map(entry => html`
           <div @click=${() => entry.isDirectory ? handleDirClick(entry.path) : handleFileClick(entry.path)}
-            style="padding:4px 12px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:${entry.isDirectory ? '#555' : '#333'};"
+            style="padding:4px 12px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:${entry.isDirectory ? '#5a544a' : '#7a7468'};"
           >
             <span>${entry.isDirectory ? '📁' : (FILE_ICONS[entry.ext] || '📄')}</span>
             <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${entry.name}</span>
-            ${entry.isDirectory ? '' : html`<span style="color:#aaa;font-size:10px;">${formatFileSize(entry.size)}</span>`}
+            ${entry.isDirectory ? '' : html`<span style="color:#a09886;font-size:10px;">${formatFileSize(entry.size)}</span>`}
           </div>
         `)}
       </div>
@@ -448,7 +448,7 @@ function renderFileView() {
     // the stale chatPanel (a persistent web component) must not be rendered.
     const inner = (currentConvId && chatPanel)
       ? chatPanel
-      : html`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">选择一个对话</div>`;
+      : html`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#7a7468;">选择一个对话</div>`;
     // On macOS the native titlebar is hidden; the chat panel is a 3rd-party web
     // component we can't inject drag styles into, so prepend a thin drag strip.
     return html`
@@ -461,24 +461,24 @@ function renderFileView() {
 
   const name = activeFilePath.slice(activeFilePath.lastIndexOf('/') + 1);
   const header = html`
-    <div @dblclick=${handleDragDblClick} style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid #e0e0e0;background:#fff;${DRAG}">
-      <button @click=${handleCloseFile} style="border:none;background:none;cursor:pointer;font-size:14px;color:#888;${NO_DRAG}">← 返回</button>
-      <span style="font-size:13px;color:#555;">${name}</span>
+    <div @dblclick=${handleDragDblClick} style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid #d8d0c2;background:#ece8de;${DRAG}">
+      <button @click=${handleCloseFile} style="border:none;background:none;cursor:pointer;font-size:14px;color:#7a7468;${NO_DRAG}">← 返回</button>
+      <span style="font-size:13px;color:#5a544a;">${name}</span>
     </div>
   `;
 
   if (!fileViewData) {
-    return html`${header}<div style="display:flex;align-items:center;justify-content:center;flex:1;color:#888;">加载中...</div>`;
+    return html`${header}<div style="display:flex;align-items:center;justify-content:center;flex:1;color:#7a7468;">加载中...</div>`;
   }
 
   const data = fileViewData;
   let body;
   switch (data.type) {
     case 'text':
-      body = html`<pre style="flex:1;overflow:auto;margin:0;padding:16px;background:#f6f8fa;font-family:monospace;font-size:13px;white-space:pre-wrap;">${data.content}</pre>`;
+      body = html`<pre style="flex:1;overflow:auto;margin:0;padding:16px;background:#e2ddd0;font-family:monospace;font-size:13px;white-space:pre-wrap;">${data.content}</pre>`;
       break;
     case 'image':
-      body = html`<div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:#f0f0f0;">
+      body = html`<div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:#d6d0c2;">
         <img src="${data.content}" alt="${data.name}" style="max-width:100%;max-height:100%;" />
       </div>`;
       break;
@@ -487,7 +487,7 @@ function renderFileView() {
       break;
     case 'error':
     default:
-      body = html`<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#999;font-size:14px;">${data.message || '无法预览此文件'}</div>`;
+      body = html`<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#a09886;font-size:14px;">${data.message || '无法预览此文件'}</div>`;
       break;
   }
 
@@ -525,23 +525,23 @@ function promptApiKey(container: HTMLElement): Promise<string | null> {
     };
 
     const form = document.createElement('form');
-    form.style.cssText = 'display:flex;flex-direction:column;gap:12px;width:360px;max-width:90vw;padding:24px;background:#fff;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.15);font-family:sans-serif;';
+    form.style.cssText = 'display:flex;flex-direction:column;gap:12px;width:360px;max-width:90vw;padding:24px;background:#ece8de;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.15);font-family:sans-serif;';
 
     const title = document.createElement('h3');
     title.textContent = '请输入 DeepSeek API Key';
-    title.style.cssText = 'margin:0;font-size:16px;color:#222;';
+    title.style.cssText = 'margin:0;font-size:16px;color:#5a544a;';
     form.appendChild(title);
 
     const hint = document.createElement('p');
     hint.textContent = 'Key 将保存在本地，用于调用 DeepSeek 模型。';
-    hint.style.cssText = 'margin:0;font-size:12px;color:#888;';
+    hint.style.cssText = 'margin:0;font-size:12px;color:#7a7468;';
     form.appendChild(hint);
 
     const input = document.createElement('input');
     input.type = 'password';
     input.placeholder = 'sk-...';
     input.required = true;
-    input.style.cssText = 'padding:8px 10px;border:1px solid #ccc;border-radius:4px;font-size:14px;outline:none;';
+    input.style.cssText = 'padding:8px 10px;border:1px solid #d8d0c2;border-radius:4px;font-size:14px;outline:none;background:#e8e3d8;color:#5a544a;';
     form.appendChild(input);
 
     const row = document.createElement('div');
@@ -550,13 +550,13 @@ function promptApiKey(container: HTMLElement): Promise<string | null> {
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
     cancelBtn.textContent = '取消';
-    cancelBtn.style.cssText = 'padding:6px 12px;border:1px solid #ccc;background:#f5f5f5;border-radius:4px;cursor:pointer;font-size:14px;';
+    cancelBtn.style.cssText = 'padding:6px 12px;border:1px solid #d8d0c2;background:#e8e3d8;color:#5a544a;border-radius:4px;cursor:pointer;font-size:14px;';
     cancelBtn.onclick = () => done(null);
 
     const submitBtn = document.createElement('button');
     submitBtn.type = 'submit';
     submitBtn.textContent = '保存';
-    submitBtn.style.cssText = 'padding:6px 12px;border:none;background:#2563eb;color:#fff;border-radius:4px;cursor:pointer;font-size:14px;';
+    submitBtn.style.cssText = 'padding:6px 12px;border:none;background:#6b7d5e;color:#fff;border-radius:4px;cursor:pointer;font-size:14px;';
 
     row.appendChild(cancelBtn);
     row.appendChild(submitBtn);
@@ -587,7 +587,7 @@ async function initApp() {
     console.error('[GISBuddy] unhandled rejection:', e.reason);
   });
 
-  render(html`<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#888;">GISBuddy loading...</div>`, app);
+  render(html`<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#7a7468;">GISBuddy loading...</div>`, app);
 
   apiKey = (await gisbuddy.getApiKey()) || '';
   if (!apiKey) {
