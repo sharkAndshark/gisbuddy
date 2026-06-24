@@ -28,6 +28,13 @@
       --border: #d8d0c2;
       --color-text-primary: #5a544a;
       --color-border: #d8d0c2;
+      /* Print aesthetic: collapse card/muted surfaces into the paper so no
+         filled color blocks remain in the conversation area. --popover and
+         --accent are left as real colors so dropdowns and hover states still
+         read. --card-foreground stays the text color. */
+      --card: transparent;
+      --card-foreground: #5a544a;
+      --muted: transparent;
     }
     /* Left-align chat message content (pi-chat-panel uses max-w-3xl mx-auto,
        which centers a 768px column and leaves blank margins when the panel is
@@ -38,6 +45,149 @@
     pi-chat-panel .max-w-3xl.mx-auto {
       margin-left: 0 !important;
       margin-right: 0 !important;
+    }
+
+    /* === Print aesthetic for the conversation area ============================
+       Only paper, text, and hairlines. No filled color blocks, no rounded
+       corners, no shadows. Surfaces collapse into the page; hierarchy is
+       carried by type (serif body / mono code), weight, indentation, and
+       1px rules. --card/--muted are already transparent above, which flattens
+       bg-card / bg-muted automatically. The rules below finish the job for
+       elements that bake in gradients, borders, radii, or shadows. */
+
+    /* markdown-block sets `overflow-wrap: anywhere`, which collapses the
+       min-content intrinsic width to 1ch. Inside the flex-column message
+       stack, flex items resolve min-width:auto to min-content, so the text
+       block is allowed to shrink to ~1 character wide — any width pressure
+       (sidebar + file tree eating 460px, max-w-3xl vs. parent) then squeezes
+       it and CJK wraps after a few characters (e.g. 数据覆盖范 / 围). CJK
+       already breaks between characters by default, so the aggressive
+       `anywhere` is unnecessary; `break-word` only wraps on real overflow
+       and does not collapse min-content, so the flex block keeps its width. */
+    pi-chat-panel .markdown-content,
+    pi-chat-panel markdown-block {
+      overflow-wrap: break-word !important;
+    }
+
+    /* Body type: serif for prose, mono for code/tool text. */
+    pi-chat-panel,
+    pi-chat-panel .markdown-content {
+      font-family: 'Songti SC', 'STSong', Georgia, 'Times New Roman', serif;
+    }
+    pi-chat-panel code-block,
+    pi-chat-panel .markdown-content code,
+    pi-chat-panel tool-message,
+    pi-chat-panel .font-mono,
+    pi-chat-panel thinking-block {
+      font-family: var(--font-mono);
+    }
+
+    /* User message: was an orange gradient bubble. Render as a "> " quoted
+       block — a floated greater-than glyph at the start, no fill/border/
+       radius/blur. The glyph is the print shorthand for quoted text. */
+    .user-message-container {
+      background: none !important;
+      border: none !important;
+      border-radius: 0 !important;
+      backdrop-filter: none !important;
+      padding: 2px 0 !important;
+      max-width: 100% !important;
+    }
+    .user-message-container::before {
+      content: ">";
+      float: left;
+      color: #a09886;
+      font-family: var(--font-mono);
+      margin-right: 6px;
+      line-height: 1.7;
+    }
+
+    /* Tool-call cards: drop the card frame for tools that fall back to the
+       default renderer (isCustom:false wraps in a card div). Our custom
+       box-drawing renderers (isCustom:true) return their own div directly,
+       so exclude .gisbuddy-tool-block to avoid conflicting with its styles. */
+    tool-message > div:not(.gisbuddy-tool-block) {
+      background: none !important;
+      border: none !important;
+      border-top: 1px solid var(--border) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      padding: 6px 0 !important;
+    }
+
+    /* Code blocks: drop the frame, mark with a left hairline rule. The language
+       label and copy control sit to the right of the rule; the pre already has
+       no background. */
+    code-block > div {
+      border: none !important;
+      border-left: 1px solid var(--border) !important;
+      border-radius: 0 !important;
+    }
+
+    /* Inline code: no muted pill — just monospace (bg already transparent via
+       --muted). Strip the pill padding/radius so it reads as plain type. */
+    .markdown-content code:not(.hljs) {
+      background: none !important;
+      padding: 0 1px !important;
+      border-radius: 0 !important;
+    }
+
+    /* Tables: header row loses its fill (already via --muted); keep only a
+       bottom rule under the header, drop vertical cell borders for a clean
+       printed-table look. */
+    .markdown-content th {
+      border-right: none !important;
+      border-bottom: 1px solid var(--foreground) !important;
+    }
+    .markdown-content td {
+      border-right: none !important;
+    }
+
+    /* Error block: was a red-tinted rounded box. Reduce to red text with a
+       left rule. */
+    .bg-destructive\/10 {
+      background: none !important;
+      border: none !important;
+      border-left: 2px solid var(--destructive) !important;
+      border-radius: 0 !important;
+      padding-left: 10px !important;
+    }
+
+    /* Input area: was a rounded shadowed card. Flatten to a top hairline only;
+       the textarea is already transparent. Also neutralize the drag-active
+       highlight so it doesn't reintroduce a color block. */
+    message-editor > div {
+      background: none !important;
+      border: none !important;
+      border-top: 1px solid var(--border) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+    message-editor .border-primary {
+      border-color: var(--border) !important;
+    }
+    message-editor .bg-primary\/5,
+    message-editor .bg-primary\/10 {
+      background: none !important;
+    }
+
+    /* Thinking indicator: was an animated gradient text shimmer. Replace with
+       plain muted italic text — no color, no motion gradient. */
+    .animate-shimmer {
+      background: none !important;
+      -webkit-text-fill-color: #a09886 !important;
+      color: #a09886 !important;
+    }
+
+    /* Artifacts badge (rare in GISBuddy): flatten the pill to a bordered tag. */
+    pi-chat-panel button.absolute > span.rounded-md {
+      border-radius: 0 !important;
+    }
+
+    /* Pending tool-call dot: gentle opacity pulse for the in-progress state. */
+    @keyframes gisbuddy-dot-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
     }
   </style>
 </head>
