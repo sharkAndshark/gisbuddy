@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { ConversationManager } from './conversation-manager.js';
+import { ApiKeyStore } from './api-key-store.js';
 import { readFileHandler } from './handlers/read-file.js';
 import { listDirectoryHandler } from './handlers/list-directory.js';
 import { registerAgentIpc } from './handlers/agent.js';
@@ -17,7 +18,10 @@ const __dirname = path.dirname(__filename);
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let conversationManager: ConversationManager | null = null;
+let apiKeyStore: ApiKeyStore | null = null;
 let isQuitting = false;
+// Env var wins over disk (CI / e2e inject via GISBUDDY_API_KEY); disk is the
+// fallback for normal launches where the user typed the key into the prompt.
 let apiKey: string | null = process.env.GISBUDDY_API_KEY || null;
 
 const isTestMode = !!process.env.GISBUDDY_TEST;
@@ -129,6 +133,12 @@ app.whenReady().then(async () => {
   }
   logInfo('main', 'app ready', { userData: app.getPath('userData'), logFile: getLogPath() });
   conversationManager = new ConversationManager(path.join(app.getPath('userData'), 'conversations.json'));
+  apiKeyStore = new ApiKeyStore(path.join(app.getPath('userData'), 'api-key.json'));
+  // Env var takes precedence; otherwise fall back to the persisted disk key.
+  if (!apiKey) {
+    apiKey = apiKeyStore.get();
+    if (apiKey) logInfo('main', 'api key loaded from disk');
+  }
   setSessionDir(path.join(app.getPath('userData'), 'sessions'));
   fs.mkdirSync(path.join(app.getPath('userData'), 'sessions'), { recursive: true });
 
@@ -169,6 +179,8 @@ ipcMain.handle('configure', async (_event, key: string) => {
   // Forward to AuthStorage so the AgentSession picks it up on the next prompt.
   if (!isTestMode) {
     authStorage.setRuntimeApiKey('deepseek', key);
+    // Persist so the user isn't re-prompted on the next launch.
+    apiKeyStore?.save(key);
   }
   return { success: true };
 });
