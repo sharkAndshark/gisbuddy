@@ -6,6 +6,7 @@ release/
 .DS_Store
 test-data/
 _reference/
+api-key.json
 
 gdal-bin/
 !gdal-bin/.gitkeep
