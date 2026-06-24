@@ -1,24 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <g fill="none" stroke="#1a1a2e" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+  <!-- warm paper background, matches app theme -->
+  <rect width="512" height="512" rx="112" fill="#f5efe0"/>
+  <!-- subtle inner circle for visual weight -->
+  <circle cx="256" cy="256" r="200" fill="#fbf6ea"/>
+  <!-- duck: same proportions as tray-icon.svg (22x22 → 512x512) -->
+  <g stroke="#1a1a2e" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
     <!-- body -->
-    <ellipse cx="240" cy="300" rx="110" ry="85" transform="rotate(-10,240,300)"/>
+    <ellipse cx="232" cy="303" rx="116" ry="93" fill="#ffffff"/>
     <!-- head -->
-    <circle cx="330" cy="190" r="65"/>
-    <!-- beak -->
-    <polyline points="390,180 440,195 390,215"/>
+    <circle cx="326" cy="186" r="70" fill="#ffffff"/>
+    <!-- beak (filled orange) -->
+    <polyline points="384,175 442,198 384,221" fill="#f5a020"/>
     <!-- eye -->
-    <circle cx="350" cy="175" r="10" fill="#1a1a2e"/>
-    <!-- eye highlight -->
-    <circle cx="353" cy="172" r="3" fill="white" stroke="none"/>
+    <circle cx="346" cy="172" r="9" fill="#1a1a2e" stroke="none"/>
     <!-- wing -->
-    <path d="M200,300 Q250,260 300,310"/>
-    <!-- tail -->
-    <path d="M145,270 Q100,250 120,310"/>
-    <!-- leg left -->
-    <path d="M200,380 L195,430 M175,430 L195,430 L215,430"/>
-    <!-- leg right -->
-    <path d="M270,380 L265,430 M245,430 L265,430 L285,430"/>
-    <!-- cheek blush -->
-    <ellipse cx="345" cy="205" rx="15" ry="10" fill="#f5a0a0" stroke="none" opacity="0.4"/>
+    <path d="M186,303 Q233,256 279,303" fill="none"/>
   </g>
 </svg>
