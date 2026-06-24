@@ -53,8 +53,8 @@ function lines(s: string): string[] {
 function resultText(result: ToolResultMessage | undefined): string {
   if (!result?.content) return '';
   return result.content
-    .filter((c: any) => c.type === 'text')
-    .map((c: any) => c.text)
+    .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
+    .map((c) => c.text)
     .join('\n');
 }
 
@@ -83,7 +83,7 @@ function block(
         <span style="font-weight:600;">${title}</span>
       </div>
       ${bodyLines.length > 0
-        ? html`<div style="margin-top:2px;">
+        ? html`<div style="margin-top:2px;max-height:300px;overflow-y:auto;">
             ${bodyLines.map((l) => html`<div style="white-space:pre-wrap;word-break:break-word;"><span style="color:${COLOR_RULE};">  │ </span><span>${l}</span></div>`)}
           </div>`
         : null}
@@ -147,7 +147,7 @@ class EditToolRenderer implements ToolRenderer<EditParams> {
     const out = resultText(result);
     // The edit tool returns a diff in `details`; the text content is a summary.
     // Show the diff if present, otherwise the text output.
-    const diff = (result as any)?.details?.diff as string | undefined;
+    const diff = (result as { details?: { diff?: string } })?.details?.diff;
     if (diff) body.push(...lines(diff));
     else if (out) body.push(...lines(out));
 

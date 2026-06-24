@@ -102,9 +102,11 @@
       line-height: 1.7;
     }
 
-    /* Tool-call cards: drop the card frame (bg already transparent via --card),
-       keep a single top hairline to separate each call from surrounding prose. */
-    tool-message > div {
+    /* Tool-call cards: drop the card frame for tools that fall back to the
+       default renderer (isCustom:false wraps in a card div). Our custom
+       box-drawing renderers (isCustom:true) return their own div directly,
+       so exclude .gisbuddy-tool-block to avoid conflicting with its styles. */
+    tool-message > div:not(.gisbuddy-tool-block) {
       background: none !important;
       border: none !important;
       border-top: 1px solid var(--border) !important;
