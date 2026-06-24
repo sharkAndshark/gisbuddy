@@ -29,6 +29,16 @@
       --color-text-primary: #5a544a;
       --color-border: #d8d0c2;
     }
+    /* Left-align chat message content (pi-chat-panel uses max-w-3xl mx-auto,
+       which centers a 768px column and leaves blank margins when the panel is
+       wider — e.g. after collapsing the sidebar. Override mx-auto to mx-0 so
+       content hugs the left edge; the max-width is preserved for readability.
+       When the panel is narrower than 768px (sidebar expanded), mx-auto has no
+       visible effect anyway, so this override is safe in both states.) */
+    pi-chat-panel .max-w-3xl.mx-auto {
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
   </style>
 </head>
 <body>

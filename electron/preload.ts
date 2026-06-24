@@ -40,4 +40,8 @@ window.gisbuddy = {
   // ── File operations ──
   readFile: (filePath: string) => ipcRenderer.invoke('read-file', filePath),
   listDirectory: (dirPath: string) => ipcRenderer.invoke('list-directory', dirPath),
+
+  // ── Logging (writes to userData/gisbuddy.log via main) ──
+  log: (level: string, scope: string, msg: string, extra?: unknown) =>
+    ipcRenderer.invoke('log', level, scope, msg, extra),
 };

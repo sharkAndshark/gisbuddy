@@ -41,8 +41,19 @@ const gisbuddy = (window as unknown as {
     agentDispose: (conversationId: string) => Promise<void>;
     onAgentEvent: (listener: (conversationId: string, event: unknown) => void) => () => void;
     fauxSetResponses: (responses: unknown[]) => Promise<void>;
+    log: (level: string, scope: string, msg: string, extra?: unknown) => Promise<void>;
   };
 }).gisbuddy;
+
+// ── Logger (writes to userData/gisbuddy.log via IPC) ──
+function rlog(scope: string, msg: string, extra?: unknown): void {
+  try { gisbuddy.log('info', scope, msg, extra); } catch { /* IPC may not be ready */ }
+  console.log(`[${scope}] ${msg}`, extra ?? '');
+}
+function rlogErr(scope: string, msg: string, extra?: unknown): void {
+  try { gisbuddy.log('error', scope, msg, extra); } catch { /* IPC may not be ready */ }
+  console.error(`[${scope}] ${msg}`, extra ?? '');
+}
 
 interface FileEntry { name: string; path: string; isDirectory: boolean; size: number; ext: string; }
 interface FileViewData { type: 'text' | 'image' | 'geojson' | 'error'; content: string | Record<string, unknown>; name?: string; message?: string; }
@@ -54,6 +65,9 @@ let currentConvId: string | null = null;
 let currentCwd: string | null = null;
 let chatPanel: ChatPanel | null = null;
 let currentAgent: AgentProxy | null = null;
+
+// ── Sidebar collapse state ──
+let sidebarCollapsed = false;
 
 // ── File tree state ──
 let currentDir = '';
@@ -208,15 +222,39 @@ async function handleDeleteConversation(convId: string) {
 }
 
 // ── Sidebar rendering ──
+function handleToggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  rlog('sidebar', 'toggle', { collapsed: sidebarCollapsed });
+  renderApp();
+}
+
 function renderSidebar() {
+  // Collapsed: float the + and expand buttons over the main content, right
+  // next to the macOS traffic lights. No sidebar panel is rendered, so the
+  // conversation list disappears completely for full immersion.
+  if (sidebarCollapsed) {
+    return html`
+      <div data-testid="sidebar" @dblclick=${handleDragDblClick} style="position:absolute;top:0;left:0;z-index:9999;${isMac ? 'height:38px;padding-left:80px;padding-right:16px;' : 'padding:12px 16px;'}display:flex;justify-content:flex-start;align-items:center;gap:2px;${DRAG}">
+        <button @click=${() => handleNewConversation()}
+          style="border:none;background:none;color:#5a544a;cursor:pointer;font-size:15px;padding:0 4px;line-height:1;${NO_DRAG}"
+          title="新建对话">+</button>
+        <button @click=${() => handleToggleSidebar()}
+          style="border:none;background:none;color:#5a544a;cursor:pointer;font-size:13px;padding:0 4px;line-height:1;${NO_DRAG}"
+          title="展开侧边栏">»</button>
+      </div>
+    `;
+  }
   return html`
     <div data-testid="sidebar" style="width:240px;height:100vh;border-right:1px solid #d8d0c2;display:flex;flex-direction:column;background:#e8e3d8;font-family:system-ui,sans-serif;">
       <!-- Header -->
-      <div @dblclick=${handleDragDblClick} style="${isMac ? 'padding:9px 16px 9px 80px;' : 'padding:12px 16px;'}display:flex;justify-content:flex-end;align-items:center;${DRAG}">
+      <div @dblclick=${handleDragDblClick} style="height:38px;flex-shrink:0;${isMac ? 'padding-left:80px;' : ''}padding-right:16px;display:flex;justify-content:flex-end;align-items:center;gap:2px;${DRAG}">
         <button @click=${handleNewConversation}
           class="new-project-btn"
           style="border:none;background:none;color:#5a544a;cursor:pointer;font-size:16px;padding:0 4px;line-height:1;${NO_DRAG}"
           title="新建对话">+</button>
+        <button @click=${() => handleToggleSidebar()}
+          style="border:none;background:none;color:#5a544a;cursor:pointer;font-size:14px;padding:0 4px;line-height:1;${NO_DRAG}"
+          title="收起侧边栏">«</button>
       </div>
 
       <!-- Conversation list (flat, single-level) -->
@@ -333,7 +371,7 @@ function renderFileTree() {
   const upOne = currentDir && currentDir !== currentCwd;
   return html`
     <div style="width:220px;height:100vh;border-left:1px solid #d8d0c2;display:flex;flex-direction:column;background:#e8e3d8;font-family:system-ui,sans-serif;font-size:13px;">
-      <div @dblclick=${handleDragDblClick} style="padding:8px 12px;border-bottom:1px solid #d8d0c2;font-size:11px;color:#7a7468;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${DRAG}">
+      <div @dblclick=${handleDragDblClick} style="height:38px;flex-shrink:0;display:flex;align-items:center;padding:0 12px;border-bottom:1px solid #d8d0c2;font-size:11px;color:#7a7468;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${DRAG}">
         📂 ${currentDir ? currentDir.slice(currentDir.lastIndexOf('/') + 1) || currentDir : '—'}
       </div>
       <div style="flex:1;overflow-y:auto;padding:4px 0;">
@@ -365,11 +403,17 @@ function renderFileView() {
     const inner = (currentConvId && chatPanel)
       ? chatPanel
       : html`<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#7a7468;">选择一个对话</div>`;
-    // On macOS the native titlebar is hidden; the chat panel is a 3rd-party web
-    // component we can't inject drag styles into, so prepend a thin drag strip.
+    // Title bar: same height as the sidebar & file-tree headers (38px).
+    // On macOS the native titlebar is hidden; this bar doubles as a drag region
+    // and prevents the traffic lights from overlapping chat content.
+    const currentConv = conversations.find(c => c.id === currentConvId);
+    const titleText = currentConv ? (currentConv.title || '新对话') : '';
     return html`
       <div style="display:flex;flex-direction:column;height:100%;">
-        ${isMac ? html`<div @dblclick=${handleDragDblClick} style="height:32px;flex-shrink:0;${DRAG}"></div>` : ''}
+        <div @dblclick=${handleDragDblClick} style="position:relative;height:38px;flex-shrink:0;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #d8d0c2;background:#ece8de;font-size:13px;color:#5a544a;font-family:system-ui,sans-serif;${sidebarCollapsed ? '' : DRAG}">
+          ${isMac ? html`<span style="width:${sidebarCollapsed ? '140px' : '64px'};flex-shrink:0;"></span>` : ''}
+          <span style="position:absolute;left:0;right:0;text-align:center;pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 16px;">${titleText}</span>
+        </div>
         <div style="flex:1;min-height:0;display:flex;flex-direction:column;">${inner}</div>
       </div>
     `;
@@ -420,7 +464,7 @@ function renderApp() {
   if (!app) return;
 
   render(html`
-    <div style="display:flex;width:100vw;height:100vh;overflow:hidden;">
+    <div style="display:flex;width:100vw;height:100vh;overflow:hidden;position:relative;">
       ${renderSidebar()}
       <div style="flex:1;height:100vh;display:flex;flex-direction:column;min-width:0;">
         ${renderFileView()}
@@ -497,25 +541,29 @@ function promptApiKey(container: HTMLElement): Promise<string | null> {
 async function initApp() {
   const app = document.getElementById('app');
   if (!app) throw new Error('App container not found');
+  rlog('init', 'initApp start');
 
   // Catch async errors from sidebar click handlers etc.
   window.addEventListener('unhandledrejection', (e) => {
-    console.error('[GISBuddy] unhandled rejection:', e.reason);
+    rlogErr('init', 'unhandled rejection', e.reason);
   });
 
   render(html`<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#7a7468;">GISBuddy loading...</div>`, app);
 
   apiKey = (await gisbuddy.getApiKey()) || '';
+  rlog('init', 'api key loaded', { hasKey: !!apiKey });
   if (!apiKey) {
     const key = await promptApiKey(app);
     if (!key) throw new Error('需要配置 API Key');
     await gisbuddy.configure(key);
     apiKey = key;
+    rlog('init', 'api key configured');
   }
 
   await setupAppStorage(apiKey);
 
   conversations = await gisbuddy.getConversations();
+  rlog('init', 'conversations loaded', { count: conversations.length });
 
   if (conversations.length > 0) {
     await switchToConversation(conversations[0].id);
@@ -523,11 +571,11 @@ async function initApp() {
     renderApp();
   }
 
-  console.log('[GISBuddy] init complete');
+  rlog('init', 'init complete');
 }
 
 initApp().catch(err => {
-  console.error('[GISBuddy] init failed:', err);
+  rlogErr('init', 'init failed', err);
   const app = document.getElementById('app');
   if (app) {
     render(html`<div style="color:red;padding:20px;font-family:sans-serif;">启动失败：${(err as Error).message}</div>`, app);

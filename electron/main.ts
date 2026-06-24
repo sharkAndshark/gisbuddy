@@ -9,6 +9,7 @@ import { registerAgentIpc } from './handlers/agent.js';
 import { authStorage, setDefaultModel, disposeSession as disposeSessionById, disposeAllSessions, setSessionDir } from './agent-session-manager.js';
 import { ensureFauxRegistered, getFauxModelId } from './faux.js';
 import { getModel } from '@earendil-works/pi-ai';
+import { logInfo, logError, getLogPath } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -126,6 +127,7 @@ app.whenReady().then(async () => {
   if (process.env.GISBUDDY_USER_DATA) {
     app.setPath('userData', process.env.GISBUDDY_USER_DATA);
   }
+  logInfo('main', 'app ready', { userData: app.getPath('userData'), logFile: getLogPath() });
   conversationManager = new ConversationManager(path.join(app.getPath('userData'), 'conversations.json'));
   setSessionDir(path.join(app.getPath('userData'), 'sessions'));
   fs.mkdirSync(path.join(app.getPath('userData'), 'sessions'), { recursive: true });
@@ -151,7 +153,7 @@ app.whenReady().then(async () => {
   registerAgentIpc(() => mainWindow);
   createWindow();
 }).catch((err) => {
-  console.error('[GISBuddy] startup failed:', err);
+  logError('main', 'startup failed', err);
 });
 
 app.on('before-quit', () => {
@@ -210,6 +212,12 @@ ipcMain.handle('read-file', (_event, filePath: string) => readFileHandler(filePa
 ipcMain.handle('list-directory', (_event, dirPath: string) => listDirectoryHandler(dirPath));
 
 ipcMain.handle('get-api-key', () => apiKey);
+
+// ── Logging (renderer → file) ──
+ipcMain.handle('log', (_event, level: string, scope: string, msg: string, extra?: unknown) => {
+  if (level === 'error') logError(scope, msg, extra);
+  else logInfo(scope, msg, extra);
+});
 
 // ── Window control ──
 // macOS with titleBarStyle:'hidden' loses native double-click-to-zoom on the
