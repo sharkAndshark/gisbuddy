@@ -271,7 +271,7 @@ function renderSidebar() {
   return html`
     <div data-testid="sidebar" style="width:240px;height:100vh;border-right:1px solid #e0e0e0;display:flex;flex-direction:column;background:#fafafa;font-family:system-ui,sans-serif;">
       <!-- Header -->
-      <div @dblclick=${handleDragDblClick} style="padding:12px 16px;${isMac ? 'padding-left:80px;' : ''}border-bottom:1px solid #e0e0e0;display:flex;justify-content:flex-end;align-items:center;${DRAG}">
+      <div @dblclick=${handleDragDblClick} style="padding:12px 16px;${isMac ? 'padding-left:80px;' : ''}display:flex;justify-content:flex-end;align-items:center;${DRAG}">
         <button @click=${handleNewProject}
           style="border:none;background:#4a90d9;color:white;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;${NO_DRAG}"
           title="新建项目">+ 项目</button>
@@ -285,7 +285,7 @@ function renderSidebar() {
             <div
               @click=${() => handleSelectProject(project.id)}
               class="project-row"
-              style="padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:${project.id === currentProjectId ? '#4a90d9' : '#555'};display:flex;align-items:center;gap:6px;background:${project.id === currentProjectId ? '#e8f0fe' : 'transparent'};"
+              style="padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:${project.id === currentProjectId ? '#4a90d9' : '#555'};display:flex;align-items:center;gap:6px;"
             >
               <span>📁</span>
               <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${project.title}</span>
@@ -306,7 +306,7 @@ function renderSidebar() {
                 ${projectConvs.map(conv => html`
                   <div
                     @click=${() => switchToConversation(conv.id)}
-                    style="padding:5px 16px;cursor:pointer;font-size:12px;color:${conv.id === currentConvId ? '#4a90d9' : '#777'};background:${conv.id === currentConvId ? '#e8f0fe' : 'transparent'};display:flex;align-items:center;gap:4px;"
+                    style="padding:5px 16px;cursor:pointer;font-size:12px;color:${conv.id === currentConvId ? '#4a90d9' : '#777'};display:flex;align-items:center;gap:4px;"
                   >
                     <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${conv.title || '新对话'}</span>
                     <button
