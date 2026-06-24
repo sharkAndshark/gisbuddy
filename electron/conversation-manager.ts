@@ -1,7 +1,17 @@
 import * as path from 'path';
 import * as fs from 'fs';
 
-export interface Project {
+export interface Conversation {
+  id: string;
+  title: string;
+  folderPath: string;
+  sessionId: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Legacy project shape kept for migration only (not exported).
+interface LegacyProject {
   id: string;
   title: string;
   folderPath: string;
@@ -10,17 +20,17 @@ export interface Project {
   archived: boolean;
 }
 
-export interface Conversation {
+interface LegacyConversation {
   id: string;
   title: string;
   projectId: string;
   sessionId: string;
   createdAt: number;
   updatedAt: number;
+  folderPath?: string;
 }
 
 export class ConversationManager {
-  private projects: Project[] = [];
   private conversations: Conversation[] = [];
   private filePath: string;
 
@@ -34,23 +44,48 @@ export class ConversationManager {
       if (fs.existsSync(this.filePath)) {
         const raw = fs.readFileSync(this.filePath, 'utf-8');
         const parsed = JSON.parse(raw);
-        this.projects = (parsed.projects || []) as Project[];
+        const legacyProjects = (parsed.projects || []) as LegacyProject[];
         const rawConvs = (parsed.conversations || []) as Record<string, unknown>[];
-        // Normalize: migrate legacy messages to sessionId-less conversations
-        // and strip any messages/legacyMessages fields
+
+        // Build a lookup from legacy projectId → folderPath for migration.
+        const projectFolderMap = new Map<string, string>();
+        for (const p of legacyProjects) {
+          projectFolderMap.set(p.id, p.folderPath);
+        }
+
+        // Normalize + migrate: each conversation inherits its project's
+        // folderPath if it doesn't already have one. Strip legacy fields.
+        const migrated: Conversation[] = [];
         for (const c of rawConvs) {
-          if (!c.sessionId) {
-            c.sessionId = '';
-          }
+          if (!c.sessionId) c.sessionId = '';
           delete c.messages;
           delete c.legacyMessages;
           delete c.sessionPath;
+
+          const legacy = c as unknown as LegacyConversation;
+          const folderPath = c.folderPath as string | undefined
+            || projectFolderMap.get(legacy.projectId)
+            || '';
+
+          migrated.push({
+            id: c.id as string,
+            title: c.title as string,
+            folderPath,
+            sessionId: c.sessionId as string,
+            createdAt: c.createdAt as number,
+            updatedAt: c.updatedAt as number,
+          });
         }
-        this.conversations = rawConvs as unknown as Conversation[];
+        this.conversations = migrated;
+
+        // If migration occurred (legacy projects existed), save the new format
+        // so we don't need to migrate again.
+        if (legacyProjects.length > 0) {
+          this.save();
+        }
       }
     } catch (err) {
       console.warn('[ConversationManager] failed to load, starting fresh:', err);
-      this.projects = [];
       this.conversations = [];
     }
   }
@@ -58,82 +93,7 @@ export class ConversationManager {
   save() {
     const dir = path.dirname(this.filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(this.filePath, JSON.stringify({ projects: this.projects, conversations: this.conversations }, null, 2));
-  }
-
-  // ── Project methods ──
-
-  getProjects(): Project[] {
-    return this.projects;
-  }
-
-  getProject(id: string): Project | undefined {
-    return this.projects.find(p => p.id === id);
-  }
-
-  createProject(folderPath: string): Project {
-    const project: Project = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      title: path.basename(folderPath),
-      folderPath,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      archived: false,
-    };
-    this.projects.push(project);
-    this.save();
-    return project;
-  }
-
-  renameProject(id: string, title: string) {
-    const project = this.projects.find(p => p.id === id);
-    if (project) {
-      project.title = title;
-      project.updatedAt = Date.now();
-      this.save();
-    }
-  }
-
-  archiveProject(id: string) {
-    const project = this.projects.find(p => p.id === id);
-    if (project) {
-      project.archived = true;
-      project.updatedAt = Date.now();
-      this.save();
-    }
-  }
-
-  unarchiveProject(id: string) {
-    const project = this.projects.find(p => p.id === id);
-    if (project) {
-      project.archived = false;
-      project.updatedAt = Date.now();
-      this.save();
-    }
-  }
-
-  // Permanently remove a project and all of its conversations.
-  // Returns the ids of the deleted conversations so callers can dispose any
-  // associated agent sessions / session files.
-  deleteProject(id: string): string[] {
-    const existed = this.projects.some(p => p.id === id);
-    if (!existed) return [];
-    const removedConvIds = this.conversations
-      .filter(c => c.projectId === id)
-      .map(c => c.id);
-    this.projects = this.projects.filter(p => p.id !== id);
-    this.conversations = this.conversations.filter(c => c.projectId !== id);
-    this.save();
-    return removedConvIds;
-  }
-
-  moveConversation(convId: string, projectId: string) {
-    const conv = this.conversations.find(c => c.id === convId);
-    if (conv) {
-      conv.projectId = projectId;
-      conv.updatedAt = Date.now();
-      this.save();
-    }
+    fs.writeFileSync(this.filePath, JSON.stringify({ conversations: this.conversations }, null, 2));
   }
 
   // ── Conversation methods ──
@@ -146,11 +106,11 @@ export class ConversationManager {
     return this.conversations.find(c => c.id === id);
   }
 
-  create(projectId: string): Conversation {
+  create(folderPath: string): Conversation {
     const conv: Conversation = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       title: '新对话',
-      projectId,
+      folderPath,
       sessionId: '', // filled after AgentSession is created
       createdAt: Date.now(),
       updatedAt: Date.now(),

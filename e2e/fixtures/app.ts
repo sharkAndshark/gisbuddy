@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 
 export interface LaunchOptions {
-  /** Project directory name (created inside tmpDir). Pass a path segment, not a full path. */
+  /** Working directory name (created inside tmpDir). Pass a path segment, not a full path. */
   withProject?: string;
   testMode?: boolean;
   /** Override the API key env var (defaults to 'test-fake-key'). */
@@ -23,18 +23,10 @@ export async function launchApp(opts?: LaunchOptions): Promise<{ app: ElectronAp
     // Don't overwrite if reusing an existing userDataDir (session persistence tests)
     if (!opts?.userDataDir || !fs.existsSync(convPath)) {
       fs.writeFileSync(convPath, JSON.stringify({
-          projects: [{
-            id: 'p1',
-            title: opts.withProject,
-            folderPath: projectDir,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          archived: false,
-        }],
         conversations: [{
           id: 'c1',
-          title: 'test',
-          projectId: 'p1',
+          title: opts.withProject,
+          folderPath: projectDir,
           sessionId: '',
           createdAt: Date.now(),
           updatedAt: Date.now(),

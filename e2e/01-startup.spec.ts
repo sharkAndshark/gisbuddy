@@ -32,12 +32,12 @@ test.describe('App 启动', () => {
     try {
       await page.waitForSelector('pi-chat-panel', { timeout: 20000 });
 
-      // Sidebar should contain the project name
+      // Sidebar should contain the conversation title
       const sidebar = page.locator('[data-testid="sidebar"]');
       const sidebarText = await sidebar.textContent();
       expect(sidebarText).toContain('e2e-sidebar');
 
-      // Sidebar should have + button (new project)
+      // Sidebar should have + button (new conversation)
       const newProjectBtn = page.locator('button.new-project-btn', { hasText: '+' });
       expect(await newProjectBtn.count()).toBeGreaterThan(0);
     } finally {
