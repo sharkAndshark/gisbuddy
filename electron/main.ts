@@ -166,9 +166,14 @@ ipcMain.handle('configure', async (_event, key: string) => {
 
 ipcMain.handle('get-conversations', () => conversationManager?.getAll() || []);
 
-ipcMain.handle('create-conversation', async (_event, projectId: string) => {
-  const conv = conversationManager?.create(projectId) || null;
-  return conv;
+ipcMain.handle('create-conversation', async () => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    message: '选择对话的工作文件夹',
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return conversationManager?.create(result.filePaths[0]) || null;
 });
 
 ipcMain.handle('delete-conversation', (_event, id: string) => {
@@ -187,46 +192,6 @@ ipcMain.handle('rename-conversation', (_event, id: string, title: string) => {
 
 ipcMain.handle('set-conversation-session-id', (_event, id: string, sessionId: string) => {
   conversationManager?.setSessionId(id, sessionId);
-});
-
-// ── Project IPC ──
-
-ipcMain.handle('get-projects', () => conversationManager?.getProjects() || []);
-
-ipcMain.handle('create-project', async () => {
-  if (!mainWindow) return null;
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openDirectory'],
-    message: '选择项目的工作文件夹',
-  });
-  if (result.canceled || result.filePaths.length === 0) return null;
-  return conversationManager?.createProject(result.filePaths[0]) || null;
-});
-
-ipcMain.handle('rename-project', (_event, id: string, title: string) => {
-  conversationManager?.renameProject(id, title);
-});
-
-ipcMain.handle('archive-project', (_event, id: string) => {
-  conversationManager?.archiveProject(id);
-});
-
-ipcMain.handle('unarchive-project', (_event, id: string) => {
-  conversationManager?.unarchiveProject(id);
-});
-
-ipcMain.handle('delete-project', (_event, id: string) => {
-  const removedConvIds = conversationManager?.deleteProject(id) || [];
-  // Dispose agent sessions for the conversations that were removed so main's
-  // cache doesn't leak. JSONL session files are retained on disk as history.
-  for (const convId of removedConvIds) {
-    try { disposeSessionById(convId); } catch { /* best effort */ }
-  }
-  return removedConvIds;
-});
-
-ipcMain.handle('move-conversation', (_event, convId: string, projectId: string) => {
-  conversationManager?.moveConversation(convId, projectId);
 });
 
 // ── File operations ──

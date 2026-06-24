@@ -8,18 +8,9 @@ window.gisbuddy = {
   getApiKey: () => ipcRenderer.invoke('get-api-key'),
   toggleMaximize: () => ipcRenderer.invoke('toggle-maximize'),
 
-  // ── Project management ──
-  getProjects: () => ipcRenderer.invoke('get-projects'),
-  createProject: () => ipcRenderer.invoke('create-project'),
-  renameProject: (id: string, title: string) => ipcRenderer.invoke('rename-project', id, title),
-  archiveProject: (id: string) => ipcRenderer.invoke('archive-project', id),
-  unarchiveProject: (id: string) => ipcRenderer.invoke('unarchive-project', id),
-  deleteProject: (id: string) => ipcRenderer.invoke('delete-project', id),
-  moveConversation: (convId: string, projectId: string) => ipcRenderer.invoke('move-conversation', convId, projectId),
-
   // ── Conversation metadata ──
   getConversations: () => ipcRenderer.invoke('get-conversations'),
-  createConversation: (projectId: string) => ipcRenderer.invoke('create-conversation', projectId),
+  createConversation: () => ipcRenderer.invoke('create-conversation'),
   deleteConversation: (id: string) => ipcRenderer.invoke('delete-conversation', id),
   renameConversation: (id: string, title: string) => ipcRenderer.invoke('rename-conversation', id, title),
   setConversationSessionId: (id: string, sessionId: string) => ipcRenderer.invoke('set-conversation-session-id', id, sessionId),

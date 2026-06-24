@@ -19,25 +19,17 @@ type AnyObj = any;
 // Faux provider now lives in the main process (electron/faux.ts); the renderer
 // drives it through `gisbuddy.fauxSetResponses` over IPC. No window.__faux export.
 
-interface Project { id: string; title: string; folderPath: string; createdAt: number; archived: boolean }
-interface Conversation { id: string; title: string; projectId: string; sessionId: string }
+interface Conversation { id: string; title: string; folderPath: string; sessionId: string }
 
 const gisbuddy = (window as unknown as {
   gisbuddy: {
     getApiKey: () => Promise<string | null>;
     configure: (key: string) => Promise<{ success: boolean }>;
     toggleMaximize: () => Promise<void>;
-    getProjects: () => Promise<Project[]>;
-    createProject: () => Promise<Project | null>;
-    renameProject: (id: string, title: string) => Promise<void>;
-    archiveProject: (id: string) => Promise<void>;
-    unarchiveProject: (id: string) => Promise<void>;
-    deleteProject: (id: string) => Promise<string[]>;
     getConversations: () => Promise<Conversation[]>;
-    createConversation: (projectId: string) => Promise<Conversation | null>;
+    createConversation: () => Promise<Conversation | null>;
     deleteConversation: (id: string) => Promise<void>;
     renameConversation: (id: string, title: string) => Promise<void>;
-    moveConversation: (convId: string, projectId: string) => Promise<void>;
     setConversationSessionId: (id: string, sessionId: string) => Promise<void>;
     listDirectory: (dirPath: string) => Promise<FileEntry[]>;
     readFile: (filePath: string) => Promise<FileViewData>;
@@ -57,9 +49,7 @@ interface FileViewData { type: 'text' | 'image' | 'geojson' | 'error'; content: 
 
 // ── Global state ──
 let apiKey = '';
-let projects: Project[] = [];
 let conversations: Conversation[] = [];
-let currentProjectId: string | null = null;
 let currentConvId: string | null = null;
 let currentCwd: string | null = null;
 let chatPanel: ChatPanel | null = null;
@@ -107,12 +97,9 @@ async function switchToConversation(convId: string) {
   if (convId === currentConvId) return;
   const conv = conversations.find(c => c.id === convId);
   if (!conv) return;
-  const project = projects.find(p => p.id === conv.projectId);
-  if (!project) return;
 
   currentConvId = convId;
-  currentProjectId = conv.projectId;
-  currentCwd = project.folderPath;
+  currentCwd = conv.folderPath;
 
   // Initialize file tree
   currentDir = currentCwd;
@@ -182,31 +169,10 @@ function handleDragDblClick() {
   gisbuddy.toggleMaximize();
 }
 
-async function handleNewProject() {
-  const newP = await gisbuddy.createProject();
-  if (!newP) {
-    // User cancelled dialog — re-render to update sidebar/loading state
-    renderApp();
-    return;
-  }
-  projects = await gisbuddy.getProjects();
-  await handleSelectProject(newP.id);
-}
-
-async function handleSelectProject(projectId: string) {
-  conversations = await gisbuddy.getConversations();
-  const projectConvs = conversations.filter(c => c.projectId === projectId);
-  if (projectConvs.length > 0) {
-    await switchToConversation(projectConvs[0].id);
-  } else {
-    await handleNewConversation(projectId);
-  }
-}
-
-async function handleNewConversation(projectId: string) {
-  const newConv = await gisbuddy.createConversation(projectId);
+async function handleNewConversation() {
+  const newConv = await gisbuddy.createConversation();
   if (!newConv) {
-    currentConvId = null;
+    // User cancelled folder dialog
     renderApp();
     return;
   }
@@ -220,11 +186,19 @@ async function handleDeleteConversation(convId: string) {
   // the AgentSession; the JSONL file is retained on disk as history.
   conversations = await gisbuddy.getConversations();
   if (convId === currentConvId) {
-    const projectConvs = conversations.filter(c => c.projectId === currentProjectId);
-    if (projectConvs.length > 0) {
-      await switchToConversation(projectConvs[0].id);
-    } else if (currentProjectId) {
-      await handleNewConversation(currentProjectId);
+    if (currentAgent) {
+      try { await currentAgent.abort(); } catch { /* ignore */ }
+      currentAgent.dispose();
+      currentAgent = null;
+    }
+    currentConvId = null;
+    currentCwd = null;
+    activeFilePath = null;
+    fileViewData = null;
+    if (mapRafHandle) { cancelAnimationFrame(mapRafHandle); mapRafHandle = 0; }
+    if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+    if (conversations.length > 0) {
+      await switchToConversation(conversations[0].id);
     } else {
       renderApp();
     }
@@ -233,97 +207,39 @@ async function handleDeleteConversation(convId: string) {
   }
 }
 
-async function handleDeleteProject(projectId: string) {
-  const project = projects.find(p => p.id === projectId);
-  if (!project) return;
-  const ok = confirm(`确定删除项目「${project.title}」及其所有对话吗？\n（磁盘上的工作文件夹与历史会话文件不会被删除）`);
-  if (!ok) return;
-  await gisbuddy.deleteProject(projectId);
-  // Tear down the current agent if it belonged to the deleted project.
-  if (currentProjectId === projectId) {
-    if (currentAgent) {
-      try { await currentAgent.abort(); } catch { /* ignore */ }
-      currentAgent.dispose();
-      currentAgent = null;
-    }
-    currentConvId = null;
-    currentProjectId = null;
-    currentCwd = null;
-    activeFilePath = null;
-    fileViewData = null;
-    if (mapRafHandle) { cancelAnimationFrame(mapRafHandle); mapRafHandle = 0; }
-    if (mapInstance) { mapInstance.remove(); mapInstance = null; }
-  }
-  projects = await gisbuddy.getProjects();
-  conversations = await gisbuddy.getConversations();
-  if (projects.length > 0) {
-    await handleSelectProject(projects[0].id);
-  } else {
-    renderApp();
-  }
-}
-
 // ── Sidebar rendering ──
 function renderSidebar() {
-  const activeProjects = projects.filter(p => !p.archived);
-  const projectConvs = currentProjectId ? conversations.filter(c => c.projectId === currentProjectId) : [];
-
   return html`
     <div data-testid="sidebar" style="width:240px;height:100vh;border-right:1px solid #d8d0c2;display:flex;flex-direction:column;background:#e8e3d8;font-family:system-ui,sans-serif;">
       <!-- Header -->
       <div @dblclick=${handleDragDblClick} style="${isMac ? 'padding:9px 16px 9px 80px;' : 'padding:12px 16px;'}display:flex;justify-content:flex-end;align-items:center;${DRAG}">
-        <button @click=${handleNewProject}
+        <button @click=${handleNewConversation}
           class="new-project-btn"
           style="border:none;background:none;color:#5a544a;cursor:pointer;font-size:16px;padding:0 4px;line-height:1;${NO_DRAG}"
-          title="新建项目">+</button>
+          title="新建对话">+</button>
       </div>
 
-      <!-- Project & conversation list -->
+      <!-- Conversation list (flat, single-level) -->
       <div style="flex:1;overflow-y:auto;padding:8px 0;">
-        ${activeProjects.map(project => html`
-          <div>
-            <!-- Project header -->
-            <div
-              @click=${() => handleSelectProject(project.id)}
-              class="project-row"
-              style="padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:${project.id === currentProjectId ? '#6b7d5e' : '#5a544a'};display:flex;align-items:center;gap:6px;"
-            >
-              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${project.title}</span>
-              <button
-                @click=${(e: Event) => { e.stopPropagation(); handleNewConversation(project.id); }}
-                class="project-action-btn"
-                style="border:none;background:none;color:#7a7468;cursor:pointer;font-size:14px;padding:0 4px;line-height:1;${NO_DRAG}"
-                title="新建对话">+</button>
-              <button
-                @click=${(e: Event) => { e.stopPropagation(); handleDeleteProject(project.id); }}
-                class="project-action-btn"
-                style="border:none;background:none;color:#a09886;cursor:pointer;font-size:11px;padding:0 4px;${NO_DRAG}"
-                title="删除项目">✕</button>
-            </div>
-            <!-- Conversations under selected project -->
-            ${project.id === currentProjectId ? html`
-              <div style="margin-left:20px;">
-                ${projectConvs.map(conv => html`
-                  <div
-                    @click=${() => switchToConversation(conv.id)}
-                    style="padding:5px 16px;cursor:pointer;font-size:12px;color:${conv.id === currentConvId ? '#6b7d5e' : '#7a7468'};display:flex;align-items:center;gap:4px;"
-                  >
-                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${conv.title || '新对话'}</span>
-                    <button
-                      @click=${(e: Event) => { e.stopPropagation(); handleDeleteConversation(conv.id); }}
-                      style="border:none;background:none;color:#a09886;cursor:pointer;font-size:11px;padding:0 2px;"
-                      title="删除对话">✕</button>
-                  </div>
-                `)}
-              </div>
-            ` : ''}
+        ${conversations.map(conv => html`
+          <div
+            @click=${() => switchToConversation(conv.id)}
+            class="project-row"
+            style="padding:6px 16px;cursor:pointer;font-size:13px;font-weight:500;color:${conv.id === currentConvId ? '#6b7d5e' : '#5a544a'};display:flex;align-items:center;gap:6px;"
+          >
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${conv.title || '新对话'}</span>
+            <button
+              @click=${(e: Event) => { e.stopPropagation(); handleDeleteConversation(conv.id); }}
+              class="project-action-btn"
+              style="border:none;background:none;color:#a09886;cursor:pointer;font-size:11px;padding:0 4px;${NO_DRAG}"
+              title="删除对话">✕</button>
           </div>
         `)}
       </div>
 
       <!-- Footer -->
       <div style="padding:8px 16px;border-top:1px solid #d8d0c2;">
-        <span style="font-size:11px;color:#a09886;">${activeProjects.length} 个项目</span>
+        <span style="font-size:11px;color:#a09886;">${conversations.length} 个对话</span>
       </div>
     </div>
   `;
@@ -599,13 +515,12 @@ async function initApp() {
 
   await setupAppStorage(apiKey);
 
-  projects = await gisbuddy.getProjects();
   conversations = await gisbuddy.getConversations();
 
-  if (projects.length === 0) {
-    await handleNewProject();
+  if (conversations.length > 0) {
+    await switchToConversation(conversations[0].id);
   } else {
-    await handleSelectProject(projects[0].id);
+    renderApp();
   }
 
   console.log('[GISBuddy] init complete');
