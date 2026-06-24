@@ -22,24 +22,19 @@ if (!existsSync(svgPath)) {
 rmSync(iconsetDir, { recursive: true, force: true });
 mkdirSync(iconsetDir, { recursive: true });
 
-const sizes = [16, 32, 64, 128, 256, 512, 1024];
-for (const s of sizes) {
-  const buf = await sharp(svgPath, { density: 384 })
-    .resize(s, s)
+// Apple iconset convention: for each nominal size N, emit
+//   icon_NxN.png      (N px)
+//   icon_NxN@2x.png   (2N px)
+const nominal = [16, 32, 128, 256, 512];
+for (const n of nominal) {
+  await sharp(svgPath, { density: 384 })
+    .resize(n, n)
     .png()
-    .toBuffer();
-  // Naming per Apple iconset convention
-  if (s <= 512) {
-    const half = s / 2;
-    await sharp(buf).toFile(resolve(iconsetDir, `icon_${half}x${half}.png`));
-    await sharp(buf).toFile(resolve(iconsetDir, `icon_${half}x${half}@2x.png`));
-  }
-  if (s === 512) {
-    await sharp(buf).toFile(resolve(iconsetDir, `icon_512x512.png`));
-  }
-  if (s === 1024) {
-    await sharp(buf).toFile(resolve(iconsetDir, `icon_512x512@2x.png`));
-  }
+    .toFile(resolve(iconsetDir, `icon_${n}x${n}.png`));
+  await sharp(svgPath, { density: 384 })
+    .resize(n * 2, n * 2)
+    .png()
+    .toFile(resolve(iconsetDir, `icon_${n}x${n}@2x.png`));
 }
 
 // Assemble .icns
