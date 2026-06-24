@@ -73,12 +73,21 @@ function createTray() {
   });
 }
 
+function setDockIcon() {
+  if (process.platform !== 'darwin') return;
+  // electron-builder embeds the .icns into the packaged .app, but in dev
+  // (`electron .`) the Dock shows Electron's default icon unless we set it
+  // explicitly. Use the 512px PNG (already bundled as extraResource).
+  const iconPath = getIconPath('icon-duck.png');
+  if (!iconPath) return;
+  const icon = nativeImage.createFromPath(iconPath);
+  if (!icon.isEmpty()) app.dock.setIcon(icon);
+}
+
 function createWindow() {
   const isMac = process.platform === 'darwin';
-  if (isMac) {
-    app.dock.hide();
-  }
 
+  setDockIcon();
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
