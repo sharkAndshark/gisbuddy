@@ -3,6 +3,11 @@ import { html, render } from 'lit';
 import L from 'leaflet';
 import { AgentProxy, type AgentStateSnapshot } from './agent-proxy.js';
 import { computeAutoTitle, formatFileSize, parentDir } from './renderer-helpers.js';
+import { registerGisbuddyToolRenderers } from './tool-renderers.js';
+
+// Register Claude-Code-style box-drawing tool renderers before any chat panel
+// is created. These override pi-web-ui's default card-style renderers.
+registerGisbuddyToolRenderers();
 
 console.log('[GISBuddy] bundle.js loaded');
 
