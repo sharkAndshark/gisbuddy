@@ -32,7 +32,12 @@ export class ApiKeyStore {
     this.key = key;
     const dir = path.dirname(this.filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(this.filePath, JSON.stringify({ apiKey: key }, null, 2));
+    // 0600 — owner read/write only. The file holds a secret; other local
+    // users must not be able to read it.
+    fs.writeFileSync(this.filePath, JSON.stringify({ apiKey: key }, null, 2), { mode: 0o600 });
+    // writeFileSync honors the umask, which may have stripped owner perms on
+    // some platforms. Explicitly chmod to guarantee 0600.
+    try { fs.chmodSync(this.filePath, 0o600); } catch { /* best effort */ }
   }
 
   clear() {

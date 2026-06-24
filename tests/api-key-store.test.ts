@@ -27,6 +27,13 @@ describe('ApiKeyStore', () => {
     expect(reloaded.get()).toBe('sk-test-123');
   });
 
+  it('writes the key file with 0600 permissions (owner-only)', () => {
+    const store = new ApiKeyStore(filePath);
+    store.save('sk-secret');
+    const mode = fs.statSync(filePath).mode & 0o777;
+    expect(mode).toBe(0o600);
+  });
+
   it('creates the parent directory if missing', () => {
     const nested = path.join(tmpDir, 'nested', 'deep', 'api-key.json');
     const store = new ApiKeyStore(nested);
