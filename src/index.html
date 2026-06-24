@@ -15,6 +15,20 @@
     .project-row .project-action-btn { opacity: 0; transition: opacity 0.1s; }
     .project-row:hover .project-action-btn,
     .project-row .project-action-btn:focus { opacity: 1; }
+    /* New-project button: hidden by default, revealed on sidebar hover for immersion. */
+    .new-project-btn { opacity: 0; transition: opacity 0.15s; }
+    [data-testid="sidebar"]:hover .new-project-btn,
+    .new-project-btn:focus { opacity: 1; }
+    /* Override pi-web-ui theme variables to match the warm paper/wood palette.
+       Default --background is pure white (oklch 100% 0 0) and --foreground is
+       near-black (oklch 14.5% 0 0) — too harsh. Soften to warm tones. */
+    :root {
+      --background: #ece8de;
+      --foreground: #5a544a;
+      --border: #d8d0c2;
+      --color-text-primary: #5a544a;
+      --color-border: #d8d0c2;
+    }
   </style>
 </head>
 <body>
