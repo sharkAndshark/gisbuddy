@@ -174,6 +174,13 @@ async function switchToConversation(convId: string) {
     // artifact messages are produced in GISBuddy's flows today).
     toolsFactory: () => [],
   });
+  // GISBuddy is DeepSeek-dedicated: main.ts pins defaultModel to a DeepSeek
+  // model and there is no IPC to change it per-session. The model selector in
+  // pi-web-ui would only mutate the renderer-side proxy.state.model (cosmetic),
+  // so hide it entirely rather than mislead users into thinking they can switch.
+  if (chatPanel.agentInterface) {
+    chatPanel.agentInterface.enableModelSelector = false;
+  }
   if (seq !== switchSeq) return;
 
   renderApp();
