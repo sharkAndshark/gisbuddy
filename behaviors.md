@@ -122,7 +122,6 @@
 | Electron | B82 | create-project 取消时返回 null | `electron/main.ts` | — | — | 3 | ✓ 认可 | 依赖 Electron dialog |
 | Electron | B83 | get-projects / get-conversations 等 CRUD IPC 注册 | `electron/main.ts` | — | — | 3 | ✓ 认可 | 依赖 Electron ipcMain + ConversationManager |
 | Electron | B84 | 窗口创建尺寸 1200x800、最小 800x600 | `electron/main.ts` | — | — | 1 | ✓ 认可 | Electron API |
-| Electron | B85 | 系统托盘图标和右键菜单 | `electron/main.ts` | — | — | 1 | ✓ 认可 | Electron Tray |
 | Electron | B86 | 关闭按钮隐藏窗口而非退出（macOS） | `electron/main.ts` | — | — | 1 | ✓ 认可 | macOS 特有 |
 
 ## E2E Test Index
