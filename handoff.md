@@ -37,7 +37,7 @@ src/
   index.html        # HTML 壳 (CSP, Leaflet CSS, bundle.js 引用)
 
 electron/
-  main.ts           # 主进程: window, tray, IPC 注册, model/authStorage 启动设置
+  main.ts           # 主进程: window, IPC 注册, model/authStorage 启动设置
   preload.ts        # 暴露 gisbuddy API (agent + 旧的 conversation/project/file)
   conversation-manager.ts  # 项目/对话元数据 (conversations.json, 不含消息)
   agent-session-manager.ts # 每对话一个 AgentSession (JSONL file-backed; sessionDir = userData/sessions)

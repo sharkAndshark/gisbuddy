@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -16,7 +16,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
-let tray: Tray | null = null;
 let conversationManager: ConversationManager | null = null;
 let apiKeyStore: ApiKeyStore | null = null;
 let isQuitting = false;
@@ -27,9 +26,9 @@ let apiKey: string | null = process.env.GISBUDDY_API_KEY || null;
 const isTestMode = !!process.env.GISBUDDY_TEST;
 
 // ── Single instance ──
-// Without this, a second launch (e.g. `just start` while the tray-resident
-// first instance is still alive) collides on the IndexedDB LevelDB LOCK file
-// in userData, producing "Failed to open LevelDB database ... LOCK" errors.
+// Without this, a second launch (e.g. `just start` while the first instance
+// is still alive) collides on the IndexedDB LevelDB LOCK file in userData,
+// producing "Failed to open LevelDB database ... LOCK" errors.
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   // Another instance owns the lock; bail out immediately.
@@ -44,7 +43,7 @@ if (!gotLock) {
   });
 }
 
-// ── Window & Tray ──
+// ── Window ──
 
 function getIconPath(name: string): string | undefined {
   const devPath = path.join(__dirname, '../../build/', name);
@@ -52,30 +51,6 @@ function getIconPath(name: string): string | undefined {
   const prodPath = path.join(process.resourcesPath || '', name);
   if (fs.existsSync(prodPath)) return prodPath;
   return undefined;
-}
-
-function createTray() {
-  const iconPath = getIconPath('tray-icon.png');
-  if (!iconPath) return;
-  const icon = nativeImage.createFromPath(iconPath);
-  icon.setTemplateImage(true);
-
-  tray = new Tray(icon);
-  tray.setToolTip('GISBuddy');
-
-  const contextMenu = Menu.buildFromTemplate([
-    { label: '退出', click: () => app.quit() },
-  ]);
-  tray.setContextMenu(contextMenu);
-
-  tray.on('click', () => {
-    if (mainWindow?.isVisible()) {
-      mainWindow?.hide();
-    } else {
-      mainWindow?.show();
-      mainWindow?.focus();
-    }
-  });
 }
 
 function setDockIcon() {
@@ -123,8 +98,6 @@ function createWindow() {
       mainWindow?.webContents.toggleDevTools();
     }
   });
-
-  createTray();
 }
 
 app.whenReady().then(async () => {
