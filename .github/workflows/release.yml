@@ -29,14 +29,30 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Install just
-        uses: extractions/setup-just@v2
-
       - name: Generate macOS icon
         run: node scripts/build-icon.mjs
 
       - name: Bundle GDAL (Homebrew)
-        run: just bundle-gdal-mac
+        run: |
+          mkdir -p gdal-bin
+          echo "=== 提取 GDAL 二进制 ==="
+          for cmd in gdalinfo ogrinfo ogr2ogr gdal_translate gdalwarp gdal_calc.py gdal_merge.py gdal_edit.py gdal_rasterize gdal_polygonize.py; do
+            p=$(which "$cmd" 2>/dev/null || true)
+            if [ -n "$p" ]; then
+              cp -fL "$p" gdal-bin/ 2>/dev/null && echo "  ✓ $cmd"
+            else
+              echo "  ✗ $cmd (未找到)"
+            fi
+          done
+          echo "=== 提取动态库依赖 ==="
+          for f in gdal-bin/*; do
+            if [ -f "$f" ] && [ -x "$f" ]; then
+              for lib in $(otool -L "$f" 2>/dev/null | grep '/opt/homebrew\|/usr/local' | awk '{print $1}'); do
+                cp -n "$lib" gdal-bin/ 2>/dev/null || true
+              done
+            fi
+          done
+          echo "✓ GDAL 已打包到 gdal-bin/"
 
       - name: Build & package (dmg + zip)
         run: npx electron-builder --mac
@@ -81,7 +97,7 @@ jobs:
 
       - name: Bundle GDAL (from conda env)
         shell: bash
-        run: node scripts/bundle-gdal-win-conda.mjs "$CONDA_PREFIX"
+        run: node scripts/bundle-gdal-win-conda.mjs "$MAMBA_ROOT_PREFIX/envs/gdal"
 
       - name: Build & package (nsis)
         run: npx electron-builder --win
