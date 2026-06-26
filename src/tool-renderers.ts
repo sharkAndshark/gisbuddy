@@ -83,7 +83,7 @@ function block(
         <span style="font-weight:600;">${title}</span>
       </div>
       ${bodyLines.length > 0
-        ? html`<div style="margin-top:2px;max-height:300px;overflow-y:auto;">
+        ? html`<div class="gisbuddy-tool-body">
             ${bodyLines.map((l) => html`<div style="white-space:pre-wrap;word-break:break-word;"><span style="color:${COLOR_RULE};">  │ </span><span>${l}</span></div>`)}
           </div>`
         : null}

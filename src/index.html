@@ -189,6 +189,36 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.35; }
     }
+
+    /* Tool-call output body: auto-hide scrollbar. All overflow/sizing is
+       controlled here (not inline) so CSS has full authority. Default: no
+       scrollbar, content clipped. Hover: reveal a thin scrollbar. */
+    .gisbuddy-tool-body {
+      margin-top: 2px;
+      max-height: 300px;
+      overflow-y: hidden;
+      scrollbar-width: none;
+    }
+    .gisbuddy-tool-body:hover {
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+    .gisbuddy-tool-body::-webkit-scrollbar {
+      width: 0;
+    }
+    .gisbuddy-tool-body:hover::-webkit-scrollbar {
+      width: 4px;
+    }
+    .gisbuddy-tool-body::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .gisbuddy-tool-body::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: 3px;
+    }
+    .gisbuddy-tool-body:hover::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.3);
+    }
   </style>
 </head>
 <body>
