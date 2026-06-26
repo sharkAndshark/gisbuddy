@@ -93,6 +93,7 @@ jobs:
         run: node scripts/build-icon-win.mjs
 
       - name: Download busybox-w32 (bundled shell fallback)
+        shell: bash
         run: |
           curl -sL -o build/busybox64.exe https://frippery.org/files/busybox/busybox64.exe
           ls -lh build/busybox64.exe
