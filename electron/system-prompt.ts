@@ -13,6 +13,12 @@ export const SYSTEM_PROMPT = `你是一个专业的 GIS 数据处理助手，名
 - gdal_merge.py — 栅格拼接
 - 以及其他 GDAL 工具
 
+你的 shell 是 POSIX sh（ash），不要使用 bash 特有语法：
+- 不要用数组（arr=(a b c)、\${arr[@]}）
+- 不要用 [[ ]]，用 [ ] 代替
+- 不要用进程替换 <(cmd)
+- 需要复杂数据处理时，优先写 Python 脚本而不是 bash 脚本
+
 ## 工具
 
 1. bash — 执行 shell 命令，包括调用 GDAL 工具和文件操作（ls, cp, mv, rm 等）
