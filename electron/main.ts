@@ -78,8 +78,12 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     title: 'GISBuddy',
-    titleBarStyle: isMac ? 'hidden' : 'default',
-    ...(isMac ? { trafficLightPosition: { x: 14, y: 13 } } : {}),
+    titleBarStyle: 'hidden',
+    // macOS: traffic lights at custom position. Windows: native overlay
+    // buttons (min/max/close) drawn by the OS at the top-right corner.
+    ...(isMac
+      ? { trafficLightPosition: { x: 14, y: 13 } }
+      : { titleBarOverlay: { color: '#ece8de', symbolColor: '#5a544a', height: 38 } }),
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -215,9 +219,10 @@ ipcMain.handle('log', (_event, level: string, scope: string, msg: string, extra?
 });
 
 // ── Window control ──
-// macOS with titleBarStyle:'hidden' loses native double-click-to-zoom on the
-// title bar. The renderer's drag regions (–webkit-app-region:drag) only provide
-// dragging, so we expose a manual toggle for double-click handlers.
+// All platforms use titleBarStyle:'hidden', so native double-click-to-zoom
+// on the title bar is unavailable. The renderer's drag regions
+// (-webkit-app-region:drag) only provide dragging, so we expose a manual
+// toggle for double-click handlers on all platforms.
 ipcMain.handle('toggle-maximize', () => {
   if (!mainWindow) return;
   if (mainWindow.isMaximized()) {

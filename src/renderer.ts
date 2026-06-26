@@ -11,12 +11,12 @@ registerGisbuddyToolRenderers();
 
 console.log('[GISBuddy] bundle.js loaded');
 
-// macOS uses a hidden native titlebar; we provide drag regions in the web content.
-// On Windows/Linux the native titlebar is kept (see electron/main.ts), so drag
-// regions must be no-ops there to avoid changing the layout or behavior.
+// All platforms use a hidden native titlebar; we provide drag regions in the
+// web content. On macOS the traffic lights sit at top-left; on Windows the
+// OS draws overlay min/max/close buttons at top-right (titleBarOverlay).
 const isMac = typeof process !== 'undefined' && process.platform === 'darwin';
-const DRAG = isMac ? '-webkit-app-region:drag;' : '';
-const NO_DRAG = isMac ? '-webkit-app-region:no-drag;' : '';
+const DRAG = '-webkit-app-region:drag;';
+const NO_DRAG = '-webkit-app-region:no-drag;';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyObj = any;
@@ -188,10 +188,10 @@ async function switchToConversation(convId: string) {
 }
 
 // ── Actions ──
-// macOS hidden titlebar: double-click on a drag region toggles maximize.
-// On Windows/Linux the native titlebar handles this, so the handler is a no-op.
+// Hidden titlebar on all platforms: double-click on a drag region toggles
+// maximize. On macOS this replaces the native behavior lost with
+// titleBarStyle:'hidden'; on Windows it complements the overlay buttons.
 function handleDragDblClick() {
-  if (!isMac) return;
   gisbuddy.toggleMaximize();
 }
 
@@ -246,7 +246,7 @@ function renderSidebar() {
   // conversation list disappears completely for full immersion.
   if (sidebarCollapsed) {
     return html`
-      <div data-testid="sidebar" @dblclick=${handleDragDblClick} style="position:absolute;top:0;left:0;z-index:9999;${isMac ? 'height:38px;padding-left:80px;padding-right:16px;' : 'padding:12px 16px;'}display:flex;justify-content:flex-start;align-items:center;gap:2px;${DRAG}">
+      <div data-testid="sidebar" @dblclick=${handleDragDblClick} style="position:absolute;top:0;left:0;z-index:9999;${isMac ? 'height:38px;padding-left:80px;padding-right:16px;' : 'height:38px;padding-left:16px;padding-right:140px;'}display:flex;justify-content:flex-start;align-items:center;gap:2px;${DRAG}">
         <button @click=${() => handleNewConversation()}
           style="border:none;background:none;color:#5a544a;cursor:pointer;font-size:15px;padding:0 4px;line-height:1;${NO_DRAG}"
           title="新建对话">+</button>
@@ -259,7 +259,7 @@ function renderSidebar() {
   return html`
     <div data-testid="sidebar" style="width:240px;height:100vh;border-right:1px solid #d8d0c2;display:flex;flex-direction:column;background:#e8e3d8;font-family:system-ui,sans-serif;">
       <!-- Header -->
-      <div @dblclick=${handleDragDblClick} style="height:38px;flex-shrink:0;${isMac ? 'padding-left:80px;' : ''}padding-right:16px;display:flex;justify-content:flex-end;align-items:center;gap:2px;${DRAG}">
+      <div @dblclick=${handleDragDblClick} style="height:38px;flex-shrink:0;${isMac ? 'padding-left:80px;' : 'padding-left:16px;'}padding-right:${isMac ? '16px' : '140px'};display:flex;justify-content:flex-end;align-items:center;gap:2px;${DRAG}">
         <button @click=${handleNewConversation}
           class="new-project-btn"
           style="border:none;background:none;color:#5a544a;cursor:pointer;font-size:16px;padding:0 4px;line-height:1;${NO_DRAG}"
@@ -424,7 +424,7 @@ function renderFileView() {
       <div style="display:flex;flex-direction:column;height:100%;">
         <div @dblclick=${handleDragDblClick} style="position:relative;height:38px;flex-shrink:0;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #d8d0c2;background:#ece8de;font-size:13px;color:#5a544a;font-family:system-ui,sans-serif;${sidebarCollapsed ? '' : DRAG}">
           ${isMac ? html`<span style="width:${sidebarCollapsed ? '140px' : '64px'};flex-shrink:0;"></span>` : ''}
-          <span style="position:absolute;left:0;right:0;text-align:center;pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 16px;">${titleText}</span>
+          <span style="position:absolute;left:0;right:0;text-align:center;pointer-events:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 ${isMac ? '16px' : '150px'} 0 ${isMac ? '16px' : '16px'};">${titleText}</span>
         </div>
         <div style="flex:1;min-height:0;display:flex;flex-direction:column;">${inner}</div>
       </div>
@@ -436,6 +436,7 @@ function renderFileView() {
     <div @dblclick=${handleDragDblClick} style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid #d8d0c2;background:#ece8de;${DRAG}">
       <button @click=${handleCloseFile} style="border:none;background:none;cursor:pointer;font-size:14px;color:#7a7468;${NO_DRAG}">← 返回</button>
       <span style="font-size:13px;color:#5a544a;">${name}</span>
+      ${isMac ? '' : html`<span style="flex:1;"></span><span style="width:140px;flex-shrink:0;"></span>`}
     </div>
   `;
 
