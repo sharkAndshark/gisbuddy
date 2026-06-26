@@ -70,6 +70,13 @@
       {
         "from": "build/icon-duck.png",
         "to": "icon-duck.png"
+      },
+      {
+        "from": "build/busybox64.exe",
+        "to": "busybox64.exe",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {

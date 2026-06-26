@@ -101,6 +101,13 @@ dist-full-win URL='':
 
 # ── 图标 ────────────────────────────────────────────
 
+# 下载 Windows 端捆绑的 busybox-w32 shell（构建前置，仅 Windows 打包需要）
+fetch-busybox:
+  @echo "=== 下载 busybox-w32 ==="
+  @mkdir -p build
+  curl -sL -o build/busybox64.exe https://frippery.org/files/busybox/busybox64.exe
+  @echo "✓ build/busybox64.exe 已下载"
+
 # 重新生成 macOS 应用图标（SVG → .icns + PNG，需 iconutil）
 icon-mac:
   @echo "=== 生成 macOS 图标 ==="

@@ -92,6 +92,11 @@ jobs:
       - name: Generate Windows icon
         run: node scripts/build-icon-win.mjs
 
+      - name: Download busybox-w32 (bundled shell fallback)
+        run: |
+          curl -sL -o build/busybox64.exe https://frippery.org/files/busybox/busybox64.exe
+          ls -lh build/busybox64.exe
+
       - name: Install GDAL via micromamba
         uses: mamba-org/setup-micromamba@v2
         with:

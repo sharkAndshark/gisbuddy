@@ -10,5 +10,8 @@ api-key.json
 
 gdal-bin/
 !gdal-bin/.gitkeep
+
+# Bundled Windows shell (downloaded at build time, not committed)
+build/busybox64.exe
 test-results/
 playwright-report/

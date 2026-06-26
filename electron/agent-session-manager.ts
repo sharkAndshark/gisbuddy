@@ -12,6 +12,7 @@ import {
 import type { Model } from '@earendil-works/pi-ai';
 import { createGisResourceLoader } from './gis-resource-loader.js';
 import { getBundledGdalEnv } from './gdal-path.js';
+import { resolveShellPath } from './shell-resolver.js';
 
 // All sessions share these process-global services. API key is injected via
 // `authStorage.setRuntimeApiKey` from main.ts (DeepSeek for production, faux for tests).
@@ -80,22 +81,27 @@ export async function getOrCreateSession(
     ? SessionManager.open(opts.sessionFilePath, sessionDir, opts.cwd)
     : SessionManager.create(opts.cwd, sessionDir);
 
-  // Override the built-in bash to inject bundled GDAL into PATH. In dev the
-  // bundled dir is empty and the system PATH still wins; in release the
-  // bundled binaries are reachable without users installing GDAL themselves.
-  // On Windows we also inject GDAL_DATA / PROJ_LIB so the binaries can find
-  // their projection & data files inside the bundled gdal-bin/ tree.
+  // Override the built-in bash to:
+  //   1. inject bundled GDAL into PATH (macOS + Windows)
+  //   2. inject GDAL_DATA / PROJ_LIB so Windows-bundled GDAL finds its data
+  //   3. use a bundled shell on Windows when no system bash is available
+  //      (pi-coding-agent's bash tool requires a bash-compatible shell; on
+  //      Windows without Git for Windows we fall back to bundled busybox-w32)
   const customTools = [];
   const gdalEnv = getBundledGdalEnv();
-  if (gdalEnv) {
+  const shellPath = resolveShellPath();
+  if (gdalEnv || shellPath) {
     customTools.push(
       createBashTool(opts.cwd, {
+        shellPath: shellPath ?? undefined,
         spawnHook: (ctx) => ({
           ...ctx,
           env: {
             ...ctx.env,
-            ...gdalEnv.extraEnv,
-            PATH: `${gdalEnv.path}${path.delimiter}${ctx.env.PATH ?? process.env.PATH ?? ''}`,
+            ...(gdalEnv?.extraEnv ?? {}),
+            PATH: gdalEnv
+              ? `${gdalEnv.path}${path.delimiter}${ctx.env.PATH ?? process.env.PATH ?? ''}`
+              : ctx.env.PATH,
           },
         }),
       }),
