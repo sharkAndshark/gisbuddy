@@ -164,6 +164,14 @@ jobs:
             - macOS: GDAL binaries are bundled (from Homebrew).
             - Windows: GDAL binaries + data files are bundled (from conda-forge).
 
+            ### Third-party licenses
+            This release bundles the following third-party software:
+            - **BusyBox** (busybox-w32, GPLv2) — bundled shell for Windows.
+              Source code: https://gitlab.com/rmyorston/busybox-w32
+              Binary source: https://frippery.org/busybox/
+            - **GDAL** (MIT/X license) — geospatial data processing library.
+              Source code: https://github.com/OSGeo/gdal
+
             ### Notes
             This is the first public release of GISBuddy.
         env:
