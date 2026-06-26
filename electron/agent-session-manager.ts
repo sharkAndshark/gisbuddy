@@ -11,7 +11,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import type { Model } from '@earendil-works/pi-ai';
 import { createGisResourceLoader } from './gis-resource-loader.js';
-import { getBundledGdalPath } from './gdal-path.js';
+import { getBundledGdalEnv } from './gdal-path.js';
 
 // All sessions share these process-global services. API key is injected via
 // `authStorage.setRuntimeApiKey` from main.ts (DeepSeek for production, faux for tests).
@@ -83,16 +83,19 @@ export async function getOrCreateSession(
   // Override the built-in bash to inject bundled GDAL into PATH. In dev the
   // bundled dir is empty and the system PATH still wins; in release the
   // bundled binaries are reachable without users installing GDAL themselves.
+  // On Windows we also inject GDAL_DATA / PROJ_LIB so the binaries can find
+  // their projection & data files inside the bundled gdal-bin/ tree.
   const customTools = [];
-  const gdalPath = getBundledGdalPath();
-  if (gdalPath) {
+  const gdalEnv = getBundledGdalEnv();
+  if (gdalEnv) {
     customTools.push(
       createBashTool(opts.cwd, {
         spawnHook: (ctx) => ({
           ...ctx,
           env: {
             ...ctx.env,
-            PATH: `${gdalPath}${path.delimiter}${ctx.env.PATH ?? process.env.PATH ?? ''}`,
+            ...gdalEnv.extraEnv,
+            PATH: `${gdalEnv.path}${path.delimiter}${ctx.env.PATH ?? process.env.PATH ?? ''}`,
           },
         }),
       }),

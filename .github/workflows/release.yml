@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (without leading v). Used only when triggered manually.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    name: Build (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Generate macOS icon
+        run: node scripts/build-icon.mjs
+
+      - name: Bundle GDAL (Homebrew)
+        run: just bundle-gdal-mac
+
+      - name: Build & package (dmg + zip)
+        run: npx electron-builder --mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-mac
+          path: |
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  build-win:
+    name: Build (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate Windows icon
+        run: node scripts/build-icon-win.mjs
+
+      - name: Install GDAL via micromamba
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: gdal
+          create-args: >-
+            gdal=3.12
+            python=3.12
+          cache-environment: true
+
+      - name: Bundle GDAL (from conda env)
+        shell: bash
+        run: node scripts/bundle-gdal-win-conda.mjs "$CONDA_PREFIX"
+
+      - name: Build & package (nsis)
+        run: npx electron-builder --win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-win
+          path: |
+            release/*.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' \) \
+            -exec cp {} release-assets/ \;
+          ls -lh release-assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: release-assets/*
+          body: |
+            ## GISBuddy ${{ github.ref_name }}
+
+            ### Downloads
+            - **macOS (Apple Silicon)**: `.dmg` — drag to Applications
+            - **macOS (Intel)**: `.zip` — unzip and run
+            - **Windows**: `.exe` — NSIS installer
+
+            ### GDAL
+            - macOS: GDAL binaries are bundled (from Homebrew).
+            - Windows: GDAL binaries + data files are bundled (from conda-forge).
+
+            ### Notes
+            This is the first public release of GISBuddy.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -25,23 +25,31 @@ start: build
 
 # ── 打包 ────────────────────────────────────────────
 
-# 打包为 .app（不含 GDAL 捆绑）
-pack: build
+# 打包为 .app（不含 GDAL 捆绑，macOS）
+pack-mac: build
   npx electron-builder --dir --mac
 
-# 打包为可分发的 DMG 安装包
-dist: build
+# 打包为可分发的 DMG/ZIP 安装包（macOS）
+dist-mac: build
   npx electron-builder --mac
 
-# 将 .app 安装到 /Applications
-install-app: pack
+# 打包为未安装目录（Windows，产出 win-unpacked/）
+pack-win: build
+  npx electron-builder --dir --win
+
+# 打包为可分发的 NSIS 安装包（Windows）
+dist-win: build
+  npx electron-builder --win
+
+# 将 .app 安装到 /Applications（macOS）
+install-app: pack-mac
   cp -r "release/mac/GISBuddy.app" "/Applications/GISBuddy.app"
   @echo "✓ GISBuddy.app 已安装到 /Applications"
 
 # ── GDAL 捆绑 ──────────────────────────────────────
 
-# 从 Homebrew 提取 GDAL CLI + 依赖库到 gdal-bin/
-bundle-gdal:
+# 从 Homebrew 提取 GDAL CLI + 依赖库到 gdal-bin/（macOS）
+bundle-gdal-mac:
   @mkdir -p gdal-bin
   @echo "=== 提取 GDAL 二进制 ==="
   @set -e; \
@@ -65,21 +73,49 @@ bundle-gdal:
   @echo "✓ GDAL 已打包到 gdal-bin/"
   @ls -lh gdal-bin/ | wc -l | xargs -I{} echo "  共 {} 个文件"
 
-# 完整打包（含 GDAL 捆绑）
-pack-full: bundle-gdal pack
-  @echo "✓ 完整打包完成（含 GDAL）"
+# 下载预打包的 GDAL Windows zip 并解压到 gdal-bin/（Windows）
+#   URL 取自参数或 GDAL_WIN_URL 环境变量
+#   推荐源: GIS Internals (https://www.gisinternals.com/release.php)
+bundle-gdal-win URL='':
+  node scripts/bundle-gdal-win.mjs {{URL}}
 
-dist-full: bundle-gdal dist
-  @echo "✓ 完整分发包完成（含 GDAL）"
+# 完整打包（含 GDAL 捆绑，macOS）
+pack-full-mac: bundle-gdal-mac pack-mac
+  @echo "✓ 完整打包完成（含 GDAL，macOS）"
+
+# 完整分发包（含 GDAL 捆绑，macOS）
+dist-full-mac: bundle-gdal-mac dist-mac
+  @echo "✓ 完整分发包完成（含 GDAL，macOS）"
+
+# 完整打包（含 GDAL 捆绑，Windows）
+pack-full-win URL='':
+  just bundle-gdal-win {{URL}}
+  just pack-win
+  @echo "✓ 完整打包完成（含 GDAL，Windows）"
+
+# 完整分发包（含 GDAL 捆绑，Windows）
+dist-full-win URL='':
+  just bundle-gdal-win {{URL}}
+  just dist-win
+  @echo "✓ 完整分发包完成（含 GDAL，Windows）"
 
 # ── 图标 ────────────────────────────────────────────
 
-# 重新生成应用图标（SVG → .icns + PNG）
-icon:
-  @echo "=== 生成图标 ==="
+# 重新生成 macOS 应用图标（SVG → .icns + PNG，需 iconutil）
+icon-mac:
+  @echo "=== 生成 macOS 图标 ==="
   node -e "const sharp=require('sharp');const fs=require('fs');const p=require('path');const svg='build/icon-duck.svg';const is='build/icon-duck.iconset';fs.mkdirSync(is,{recursive:true});const sz=[[16,16],[32,32],[128,128],[256,256],[512,512]];(async()=>{for(const[w,h]of sz){await sharp(svg,{density:144}).resize(w,h).png().toFile(p.join(is,'icon_'+w+'x'+h+'.png'));await sharp(svg,{density:288}).resize(w*2,h*2).png().toFile(p.join(is,'icon_'+w+'x'+h+'@2x.png'));}await sharp(svg,{density:144}).resize(512,512).png().toFile('build/icon-duck.png');})()"
   iconutil -c icns build/icon-duck.iconset -o build/icon-duck.icns
-  @echo "✓ 图标已生成: build/icon-duck.icns + build/icon-duck.png"
+  @echo "✓ macOS 图标已生成: build/icon-duck.icns + build/icon-duck.png"
+
+# 重新生成 Windows 应用图标（SVG → .ico，跨平台，无需 iconutil）
+icon-win:
+  @echo "=== 生成 Windows 图标 ==="
+  node scripts/build-icon-win.mjs
+  @echo "✓ Windows 图标已生成: build/icon-duck.ico"
+
+# 一次性生成两端图标
+icon-all: icon-mac icon-win
 
 # ── 清理 ────────────────────────────────────────────
 

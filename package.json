@@ -1,6 +1,6 @@
 {
   "name": "gisbuddy",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "AI-powered GIS data processing assistant",
   "author": "GISBuddy",
   "type": "module",
@@ -8,6 +8,7 @@
   "scripts": {
     "build": "tsc && tsc -p electron/tsconfig.preload.json && mv dist/electron/preload.js dist/electron/preload.cjs && node scripts/build-renderer.mjs",
     "build:icon": "node scripts/build-icon.mjs",
+    "build:icon:win": "node scripts/build-icon-win.mjs",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron .",
     "pack": "electron-builder --dir",
@@ -79,6 +80,7 @@
       "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
     },
     "win": {
+      "icon": "build/icon-duck.ico",
       "target": [
         "nsis"
       ],
