@@ -1,16 +1,30 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu } from 'electron';
-import * as path from 'path';
-import * as fs from 'fs';
-import { fileURLToPath } from 'url';
-import { ConversationManager } from './conversation-manager.js';
-import { ApiKeyStore } from './api-key-store.js';
-import { readFileHandler } from './handlers/read-file.js';
-import { listDirectoryHandler } from './handlers/list-directory.js';
-import { registerAgentIpc } from './handlers/agent.js';
-import { authStorage, setDefaultModel, disposeSession as disposeSessionById, disposeAllSessions, setSessionDir } from './agent-session-manager.js';
-import { ensureFauxRegistered, getFauxModelId } from './faux.js';
-import { getModel } from '@earendil-works/pi-ai';
-import { logInfo, logError, getLogPath } from './logger.js';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  nativeImage,
+  Tray,
+  Menu,
+} from "electron";
+import * as path from "path";
+import * as fs from "fs";
+import { fileURLToPath } from "url";
+import { ConversationManager } from "./conversation-manager.js";
+import { ApiKeyStore } from "./api-key-store.js";
+import { readFileHandler } from "./handlers/read-file.js";
+import { listDirectoryHandler } from "./handlers/list-directory.js";
+import { registerAgentIpc } from "./handlers/agent.js";
+import {
+  authStorage,
+  setDefaultModel,
+  disposeSession as disposeSessionById,
+  disposeAllSessions,
+  setSessionDir,
+} from "./agent-session-manager.js";
+import { ensureFauxRegistered, getFauxModelId } from "./faux.js";
+import { getModel } from "@earendil-works/pi-ai";
+import { logInfo, logError, getLogPath } from "./logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,7 +36,7 @@ let apiKeyStore: ApiKeyStore | null = null;
 let isQuitting = false;
 // Built-in default key for internal deployments (private repo). Users can
 // still override via env var or the in-app settings dialog.
-const BUILT_IN_API_KEY = 'sk-7243d386fc0046e691f900e22b7e6e99';
+const BUILT_IN_API_KEY = "sk-7243d386fc0046e691f900e22b7e6e99";
 // Env var wins over disk (CI / e2e inject via GISBUDDY_API_KEY); disk is the
 // fallback for normal launches where the user typed the key into the prompt.
 // Built-in key is the last resort so the app works out of the box.
@@ -39,7 +53,7 @@ if (!gotLock) {
   // Another instance owns the lock; bail out immediately.
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on("second-instance", () => {
     // The running instance got a second launch — surface its window.
     if (mainWindow) {
       if (!mainWindow.isVisible()) mainWindow.show();
@@ -51,19 +65,19 @@ if (!gotLock) {
 // ── Window ──
 
 function getIconPath(name: string): string | undefined {
-  const devPath = path.join(__dirname, '../../build/', name);
+  const devPath = path.join(__dirname, "../../build/", name);
   if (fs.existsSync(devPath)) return devPath;
-  const prodPath = path.join(process.resourcesPath || '', name);
+  const prodPath = path.join(process.resourcesPath || "", name);
   if (fs.existsSync(prodPath)) return prodPath;
   return undefined;
 }
 
 function setDockIcon() {
-  if (process.platform !== 'darwin') return;
+  if (process.platform !== "darwin") return;
   // electron-builder embeds the .icns into the packaged .app, but in dev
   // (`electron .`) the Dock shows Electron's default icon unless we set it
   // explicitly. Use the 512px PNG (already bundled as extraResource).
-  const iconPath = getIconPath('icon-duck.png');
+  const iconPath = getIconPath("icon-duck.png");
   if (!iconPath) return;
   const icon = nativeImage.createFromPath(iconPath);
   if (!icon.isEmpty()) app.dock.setIcon(icon);
@@ -72,23 +86,47 @@ function setDockIcon() {
 function createTray() {
   // Windows-only: system tray icon so the app doesn't vanish
   // into Task Manager when the user closes the window.
-  if (process.platform !== 'win32') return;
+  if (process.platform !== "win32") return;
 
-  const iconPath = getIconPath('icon-duck.png');
-  if (!iconPath) return;
-  tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 }));
-  tray.setToolTip('GISBuddy');
+  const iconPath = getIconPath("icon-duck.png");
+  if (!iconPath) {
+    logError("tray", "icon not found — tray disabled");
+    return;
+  }
+  let icon = nativeImage.createFromPath(iconPath);
+  if (icon.isEmpty()) {
+    logError("tray", "icon image is empty — tray disabled");
+    return;
+  }
+  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  tray.setToolTip("GISBuddy");
   const ctx = Menu.buildFromTemplate([
-    { label: 'Show', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
-    { type: 'separator' },
-    { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
+    {
+      label: "Show GISBuddy",
+      click: () => {
+        mainWindow?.show();
+        mainWindow?.focus();
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
   ]);
   tray.setContextMenu(ctx);
-  tray.on('double-click', () => { mainWindow?.show(); mainWindow?.focus(); });
+  tray.on("double-click", () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
+  logInfo("tray", "tray created", { icon: iconPath });
 }
 
 function createWindow() {
-  const isMac = process.platform === 'darwin';
+  const isMac = process.platform === "darwin";
 
   setDockIcon();
   mainWindow = new BrowserWindow({
@@ -96,35 +134,41 @@ function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    title: 'GISBuddy',
-    titleBarStyle: 'hidden',
+    title: "GISBuddy",
+    titleBarStyle: "hidden",
     // macOS: traffic lights at custom position. Windows: native overlay
     // buttons (min/max/close) drawn by the OS at the top-right corner.
     ...(isMac
       ? { trafficLightPosition: { x: 14, y: 13 } }
-      : { titleBarOverlay: { color: '#ece8de', symbolColor: '#5a544a', height: 38 } }),
+      : {
+          titleBarOverlay: {
+            color: "#ece8de",
+            symbolColor: "#5a544a",
+            height: 38,
+          },
+        }),
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: false,
       nodeIntegration: true,
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../../src/index.html'));
+  mainWindow.loadFile(path.join(__dirname, "../../src/index.html"));
 
   // Show the window once the renderer has painted, to avoid a white flash.
   // Without this, `show: false` above would leave the window hidden forever
   // on Windows (the renderer has no IPC to call show()).
-  mainWindow.once('ready-to-show', () => {
+  mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
   });
 
-  mainWindow.on('close', (e) => {
+  mainWindow.on("close", (e) => {
     if (!isQuitting) {
       e.preventDefault();
       // macOS: hide to dock.  Windows: quit (no tray icon).
-      if (process.platform === 'darwin') {
+      if (process.platform === "darwin") {
         mainWindow?.hide();
       } else {
         isQuitting = true;
@@ -133,76 +177,96 @@ function createWindow() {
     }
   });
 
-  mainWindow.webContents.on('before-input-event', (_event, input) => {
-    if (input.key === 'F12') {
+  mainWindow.webContents.on("before-input-event", (_event, input) => {
+    if (input.key === "F12") {
       mainWindow?.webContents.toggleDevTools();
     }
   });
 }
 
-app.whenReady().then(async () => {
-  if (process.env.GISBUDDY_USER_DATA) {
-    app.setPath('userData', process.env.GISBUDDY_USER_DATA);
-  }
-  logInfo('main', 'app ready', { userData: app.getPath('userData'), logFile: getLogPath() });
-  conversationManager = new ConversationManager(path.join(app.getPath('userData'), 'conversations.json'));
-  apiKeyStore = new ApiKeyStore(path.join(app.getPath('userData'), 'api-key.json'));
-  // Env var takes precedence; otherwise fall back to the persisted disk key;
-  // finally fall back to the built-in default so the app works out of the box.
-  if (!apiKey) {
-    apiKey = apiKeyStore.get();
-    if (apiKey) {
-      logInfo('main', 'api key loaded from disk');
+app
+  .whenReady()
+  .then(async () => {
+    if (process.env.GISBUDDY_USER_DATA) {
+      app.setPath("userData", process.env.GISBUDDY_USER_DATA);
+    }
+    logInfo("main", "app ready", {
+      userData: app.getPath("userData"),
+      logFile: getLogPath(),
+    });
+    conversationManager = new ConversationManager(
+      path.join(app.getPath("userData"), "conversations.json"),
+    );
+    apiKeyStore = new ApiKeyStore(
+      path.join(app.getPath("userData"), "api-key.json"),
+    );
+    // Env var takes precedence; otherwise fall back to the persisted disk key;
+    // finally fall back to the built-in default so the app works out of the box.
+    if (!apiKey) {
+      apiKey = apiKeyStore.get();
+      if (apiKey) {
+        logInfo("main", "api key loaded from disk");
+      } else {
+        apiKey = BUILT_IN_API_KEY;
+        logInfo("main", "using built-in default api key");
+      }
+    }
+    setSessionDir(path.join(app.getPath("userData"), "sessions"));
+    fs.mkdirSync(path.join(app.getPath("userData"), "sessions"), {
+      recursive: true,
+    });
+
+    // Choose model + API key BEFORE creating the window, so the renderer's first
+    // `agent:switch` IPC (during its initApp) cannot race past setup.
+    if (isTestMode) {
+      const reg = await ensureFauxRegistered();
+      const fauxModel = reg.getModel(getFauxModelId());
+      if (!fauxModel) throw new Error("faux model missing after registration");
+      authStorage.setRuntimeApiKey("faux", "faux-dummy-key");
+      setDefaultModel(fauxModel as never);
+      console.log("[GISBuddy] test mode: faux provider registered");
     } else {
-      apiKey = BUILT_IN_API_KEY;
-      logInfo('main', 'using built-in default api key');
+      const deepseekModel = getModel("deepseek", "deepseek-v4-pro");
+      if (!deepseekModel)
+        throw new Error("DeepSeek model not found in registry");
+      setDefaultModel(deepseekModel);
+      if (apiKey) {
+        authStorage.setRuntimeApiKey("deepseek", apiKey);
+      }
     }
-  }
-  setSessionDir(path.join(app.getPath('userData'), 'sessions'));
-  fs.mkdirSync(path.join(app.getPath('userData'), 'sessions'), { recursive: true });
 
-  // Choose model + API key BEFORE creating the window, so the renderer's first
-  // `agent:switch` IPC (during its initApp) cannot race past setup.
-  if (isTestMode) {
-    const reg = await ensureFauxRegistered();
-    const fauxModel = reg.getModel(getFauxModelId());
-    if (!fauxModel) throw new Error('faux model missing after registration');
-    authStorage.setRuntimeApiKey('faux', 'faux-dummy-key');
-    setDefaultModel(fauxModel as never);
-    console.log('[GISBuddy] test mode: faux provider registered');
-  } else {
-    const deepseekModel = getModel('deepseek', 'deepseek-v4-pro');
-    if (!deepseekModel) throw new Error('DeepSeek model not found in registry');
-    setDefaultModel(deepseekModel);
-    if (apiKey) {
-      authStorage.setRuntimeApiKey('deepseek', apiKey);
-    }
-  }
+    registerAgentIpc(() => mainWindow);
+    createWindow();
+  })
+  .catch((err) => {
+    logError("main", "startup failed", err);
+  });
 
-  registerAgentIpc(() => mainWindow);
-  createWindow();
-}).catch((err) => {
-  logError('main', 'startup failed', err);
-});
-
-app.on('before-quit', () => {
+app.on("before-quit", () => {
   isQuitting = true;
   // Best-effort cleanup of AgentSession handles before the process exits.
-  try { disposeAllSessions(); } catch { /* ignore */ }
+  try {
+    disposeAllSessions();
+  } catch {
+    /* ignore */
+  }
 });
-app.on('window-all-closed', () => {
+app.on("window-all-closed", () => {
   // On Windows the tray keeps the app alive; on macOS dock does.
-  if (process.platform !== 'darwin' && !tray) {
+  if (process.platform !== "darwin" && !tray) {
     app.quit();
   }
 });
-app.on('activate', () => { mainWindow?.show(); mainWindow?.focus(); });
+app.on("activate", () => {
+  mainWindow?.show();
+  mainWindow?.focus();
+});
 
-ipcMain.handle('configure', async (_event, key: string) => {
+ipcMain.handle("configure", async (_event, key: string) => {
   apiKey = key;
   // Forward to AuthStorage so the AgentSession picks it up on the next prompt.
   if (!isTestMode) {
-    authStorage.setRuntimeApiKey('deepseek', key);
+    authStorage.setRuntimeApiKey("deepseek", key);
     // Persist so the user isn't re-prompted on the next launch.
     apiKeyStore?.save(key);
   }
@@ -211,19 +275,19 @@ ipcMain.handle('configure', async (_event, key: string) => {
 
 // ── Conversation IPC (metadata only, no messages) ──
 
-ipcMain.handle('get-conversations', () => conversationManager?.getAll() || []);
+ipcMain.handle("get-conversations", () => conversationManager?.getAll() || []);
 
-ipcMain.handle('create-conversation', async () => {
+ipcMain.handle("create-conversation", async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openDirectory'],
-    message: '选择对话的工作文件夹',
+    properties: ["openDirectory"],
+    message: "选择对话的工作文件夹",
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return conversationManager?.create(result.filePaths[0]) || null;
 });
 
-ipcMain.handle('delete-conversation', (_event, id: string) => {
+ipcMain.handle("delete-conversation", (_event, id: string) => {
   conversationManager?.delete(id);
   // Dispose the agent session so main's cache doesn't leak the conversation.
   try {
@@ -233,34 +297,44 @@ ipcMain.handle('delete-conversation', (_event, id: string) => {
   }
 });
 
-ipcMain.handle('rename-conversation', (_event, id: string, title: string) => {
+ipcMain.handle("rename-conversation", (_event, id: string, title: string) => {
   conversationManager?.rename(id, title);
 });
 
-ipcMain.handle('set-conversation-session-id', (_event, id: string, sessionId: string) => {
-  conversationManager?.setSessionId(id, sessionId);
-});
+ipcMain.handle(
+  "set-conversation-session-id",
+  (_event, id: string, sessionId: string) => {
+    conversationManager?.setSessionId(id, sessionId);
+  },
+);
 
 // ── File operations ──
 
-ipcMain.handle('read-file', (_event, filePath: string) => readFileHandler(filePath));
+ipcMain.handle("read-file", (_event, filePath: string) =>
+  readFileHandler(filePath),
+);
 
-ipcMain.handle('list-directory', (_event, dirPath: string) => listDirectoryHandler(dirPath));
+ipcMain.handle("list-directory", (_event, dirPath: string) =>
+  listDirectoryHandler(dirPath),
+);
 
-ipcMain.handle('get-api-key', () => apiKey);
+ipcMain.handle("get-api-key", () => apiKey);
 
 // ── Logging (renderer → file) ──
-ipcMain.handle('log', (_event, level: string, scope: string, msg: string, extra?: unknown) => {
-  if (level === 'error') logError(scope, msg, extra);
-  else logInfo(scope, msg, extra);
-});
+ipcMain.handle(
+  "log",
+  (_event, level: string, scope: string, msg: string, extra?: unknown) => {
+    if (level === "error") logError(scope, msg, extra);
+    else logInfo(scope, msg, extra);
+  },
+);
 
 // ── Window control ──
 // All platforms use titleBarStyle:'hidden', so native double-click-to-zoom
 // on the title bar is unavailable. The renderer's drag regions
 // (-webkit-app-region:drag) only provide dragging, so we expose a manual
 // toggle for double-click handlers on all platforms.
-ipcMain.handle('toggle-maximize', () => {
+ipcMain.handle("toggle-maximize", () => {
   if (!mainWindow) return;
   if (mainWindow.isMaximized()) {
     mainWindow.unmaximize();
