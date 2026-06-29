@@ -121,7 +121,7 @@ prepare-cache:
   @if [ ! -d "$${LOCALAPPDATA}/electron-builder/Cache/winCodeSign/winCodeSign-2.6.0" ] || \
       [ ! -d "$${LOCALAPPDATA}/electron-builder/Cache/nsis/nsis-3.0.4.1" ]; then \
     echo "=== 预填充 electron-builder 缓存 ==="; \
-    node scripts/prepare-electron-builder-cache.mjs; \
+    python scripts/prepare-electron-builder-cache.py; \
   else \
     echo "✓ electron-builder 缓存已就绪"; \
   fi

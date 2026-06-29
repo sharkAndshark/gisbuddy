@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -16,6 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 let conversationManager: ConversationManager | null = null;
 let apiKeyStore: ApiKeyStore | null = null;
 let isQuitting = false;
@@ -68,6 +69,24 @@ function setDockIcon() {
   if (!icon.isEmpty()) app.dock.setIcon(icon);
 }
 
+function createTray() {
+  // Windows-only: system tray icon so the app doesn't vanish
+  // into Task Manager when the user closes the window.
+  if (process.platform !== 'win32') return;
+
+  const iconPath = getIconPath('icon-duck.png');
+  if (!iconPath) return;
+  tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 }));
+  tray.setToolTip('GISBuddy');
+  const ctx = Menu.buildFromTemplate([
+    { label: 'Show', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
+  ]);
+  tray.setContextMenu(ctx);
+  tray.on('double-click', () => { mainWindow?.show(); mainWindow?.focus(); });
+}
+
 function createWindow() {
   const isMac = process.platform === 'darwin';
 
@@ -104,7 +123,13 @@ function createWindow() {
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
-      mainWindow?.hide();
+      // macOS: hide to dock.  Windows: quit (no tray icon).
+      if (process.platform === 'darwin') {
+        mainWindow?.hide();
+      } else {
+        isQuitting = true;
+        app.quit();
+      }
     }
   });
 
@@ -165,7 +190,12 @@ app.on('before-quit', () => {
   // Best-effort cleanup of AgentSession handles before the process exits.
   try { disposeAllSessions(); } catch { /* ignore */ }
 });
-app.on('window-all-closed', () => {});
+app.on('window-all-closed', () => {
+  // On Windows the tray keeps the app alive; on macOS dock does.
+  if (process.platform !== 'darwin' && !tray) {
+    app.quit();
+  }
+});
 app.on('activate', () => { mainWindow?.show(); mainWindow?.focus(); });
 
 ipcMain.handle('configure', async (_event, key: string) => {
