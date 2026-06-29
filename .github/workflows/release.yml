@@ -105,8 +105,9 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Use forward slashes — bash eats backslashes in $MAMBA_ROOT_PREFIX
         run: |
-          just release-win unsigned=1 conda-prefix="$MAMBA_ROOT_PREFIX/envs/gdal"
+          just release-win unsigned=1 conda-prefix="${MAMBA_ROOT_PREFIX//\\//}/envs/gdal"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
