@@ -111,8 +111,10 @@ function createTray() {
       {
         label: "Show GISBuddy",
         click: () => {
-          mainWindow?.show();
-          mainWindow?.focus();
+          if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+          }
         },
       },
       { type: "separator" },
@@ -125,12 +127,6 @@ function createTray() {
       },
     ]);
     tray.setContextMenu(ctx);
-
-    // Single-click to restore window (more reliable than double-click on Electron 33)
-    tray.on("click", () => {
-      mainWindow?.show();
-      mainWindow?.focus();
-    });
 
     logInfo("tray", "created", { icon: iconPath });
   } catch (err) {
