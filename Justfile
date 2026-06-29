@@ -131,7 +131,9 @@ prepare-cache:
 
 release-win unsigned='0' conda-prefix='':
   @echo "========== GISBuddy Windows Release =========="
-  just prepare-cache
+  # prepare-cache is optional — fails gracefully so CI (which has admin
+  # privileges and can extract symlinks itself) is not blocked.
+  -@just prepare-cache || echo "  (prepare-cache skipped)"
   just resource-prepare-win {{conda-prefix}}
   @echo "=== 编译 TypeScript + renderer ==="
   npm run build
