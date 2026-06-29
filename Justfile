@@ -2,6 +2,9 @@
 # 需要: Node.js 20+, just 1.x
 # 可选: Homebrew (用于 bundle-gdal)
 
+
+# Windows: use Git Bash (PowerShell cannot parse bash recipe syntax)
+set windows-shell := ["C:/app/Git/bin/bash.exe", "-c"]
 default:
   @just --list --justfile {{justfile()}}
 
