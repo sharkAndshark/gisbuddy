@@ -84,45 +84,58 @@ function setDockIcon() {
 }
 
 function createTray() {
-  // Windows-only: system tray icon so the app doesn't vanish
-  // into Task Manager when the user closes the window.
   if (process.platform !== "win32") return;
 
-  const iconPath = getIconPath("icon-duck.png");
-  if (!iconPath) {
-    logError("tray", "icon not found — tray disabled");
-    return;
-  }
-  let icon = nativeImage.createFromPath(iconPath);
-  if (icon.isEmpty()) {
-    logError("tray", "icon image is empty — tray disabled");
-    return;
-  }
-  tray = new Tray(icon.resize({ width: 16, height: 16 }));
-  tray.setToolTip("GISBuddy");
-  const ctx = Menu.buildFromTemplate([
-    {
-      label: "Show GISBuddy",
-      click: () => {
-        mainWindow?.show();
-        mainWindow?.focus();
+  try {
+    // Prefer .ico for tray (better Windows compatibility).
+    // Fall back to .png (16x16 works on modern Windows).
+    let iconPath = getIconPath("icon-duck.ico");
+    if (!iconPath) {
+      iconPath = getIconPath("icon-duck.png");
+    }
+    if (!iconPath) {
+      logError("tray", "no icon found");
+      return;
+    }
+
+    const icon = nativeImage.createFromPath(iconPath);
+    if (icon.isEmpty()) {
+      logError("tray", "icon is empty");
+      return;
+    }
+
+    tray = new Tray(icon.resize({ width: 16, height: 16 }));
+    tray.setToolTip("GISBuddy");
+
+    const ctx = Menu.buildFromTemplate([
+      {
+        label: "Show GISBuddy",
+        click: () => {
+          mainWindow?.show();
+          mainWindow?.focus();
+        },
       },
-    },
-    { type: "separator" },
-    {
-      label: "Quit",
-      click: () => {
-        isQuitting = true;
-        app.quit();
+      { type: "separator" },
+      {
+        label: "Quit",
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
       },
-    },
-  ]);
-  tray.setContextMenu(ctx);
-  tray.on("double-click", () => {
-    mainWindow?.show();
-    mainWindow?.focus();
-  });
-  logInfo("tray", "tray created", { icon: iconPath });
+    ]);
+    tray.setContextMenu(ctx);
+
+    // Single-click to restore window (more reliable than double-click on Electron 33)
+    tray.on("click", () => {
+      mainWindow?.show();
+      mainWindow?.focus();
+    });
+
+    logInfo("tray", "created", { icon: iconPath });
+  } catch (err) {
+    logError("tray", "failed to create", err);
+  }
 }
 
 function createWindow() {
