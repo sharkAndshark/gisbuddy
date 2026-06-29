@@ -3,13 +3,13 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (without leading v). Used only when triggered manually.'
+        description: "Version (without leading v). Used only when triggered manually."
         required: false
-        default: ''
+        default: ""
 
 permissions:
   contents: write
@@ -89,7 +89,9 @@ jobs:
       - name: Install just (command runner)
         uses: extractions/setup-just@v2
 
-      # resource-prepare-win 需要 CONDA_PREFIX 才能提取 GDAL
+      # resource-prepare-win 需要用 CONDA_PREFIX 定位 GDAL 环境。
+      # micromamba action 的 CONDA_PREFIX 指向基础环境，
+      # GDAL 在 envs/gdal 子目录下。
       - name: Install GDAL via micromamba
         uses: mamba-org/setup-micromamba@v2
         with:
@@ -103,9 +105,12 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # CI 默认 unsigned=1：winCodeSign 解压需符号链接权限，CI runner 虽有权限
-        # 但无代码签名证书；不签名不影响 NSIS 安装包可用性
-        run: just release-win unsigned=1
+        # CI 默认 unsigned=1：无代码签名证书，不签名不影响 NSIS 包可用性
+        # 显式传 CONDA_PREFIX：micromamba action 的 CONDA_PREFIX 指向基础环境，
+        # GDAL 装在 envs/gdal 子目录
+        run: |
+          export CONDA_PREFIX="$MAMBA_ROOT_PREFIX/envs/gdal"
+          just release-win unsigned=1
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
