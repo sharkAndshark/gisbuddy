@@ -94,6 +94,13 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../../src/index.html'));
 
+  // Show the window once the renderer has painted, to avoid a white flash.
+  // Without this, `show: false` above would leave the window hidden forever
+  // on Windows (the renderer has no IPC to call show()).
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+  });
+
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
