@@ -114,8 +114,21 @@ dist-full-win URL='':
 #     （需预装 micromamba/conda + gdal；或手动预填充 gdal-bin/ 跳过）
 #
 # 产出：release/GISBuddy-<version>-win-x64.exe
+# 预填充 electron-builder Windows 缓存（winCodeSign + NSIS）
+# 解决 winCodeSign.7z 内含 macOS 符号链接导致的 7zip 解压失败
+# 幂等操作：已存在的缓存直接跳过
+prepare-cache:
+  @if [ ! -d "$${LOCALAPPDATA}/electron-builder/Cache/winCodeSign/winCodeSign-2.6.0" ] || \
+      [ ! -d "$${LOCALAPPDATA}/electron-builder/Cache/nsis/nsis-3.0.4.1" ]; then \
+    echo "=== 预填充 electron-builder 缓存 ==="; \
+    node scripts/prepare-electron-builder-cache.mjs; \
+  else \
+    echo "✓ electron-builder 缓存已就绪"; \
+  fi
+
 release-win unsigned='0':
   @echo "========== GISBuddy Windows Release =========="
+  just prepare-cache
   just resource-prepare-win
   @echo "=== 编译 TypeScript + renderer ==="
   npm run build
