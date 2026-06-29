@@ -237,6 +237,7 @@ app
 
     registerAgentIpc(() => mainWindow);
     createWindow();
+    createTray();
   })
   .catch((err) => {
     logError("main", "startup failed", err);
