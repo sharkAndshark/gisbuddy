@@ -1,4 +1,5 @@
-import path from 'node:path';
+import path from "node:path";
+import { spawn } from "child_process";
 import {
   AuthStorage,
   ModelRegistry,
@@ -8,11 +9,11 @@ import {
   createBashTool,
   type AgentSession,
   type AgentSessionEvent,
-} from '@earendil-works/pi-coding-agent';
-import type { Model } from '@earendil-works/pi-ai';
-import { createGisResourceLoader } from './gis-resource-loader.js';
-import { getBundledGdalEnv } from './gdal-path.js';
-import { resolveShellPath } from './shell-resolver.js';
+} from "@earendil-works/pi-coding-agent";
+import type { Model } from "@earendil-works/pi-ai";
+import { createGisResourceLoader } from "./gis-resource-loader.js";
+import { getBundledGdalEnv } from "./gdal-path.js";
+import { resolveShellConfig, type ShellConfig } from "./shell-resolver.js";
 
 // All sessions share these process-global services. API key is injected via
 // `authStorage.setRuntimeApiKey` from main.ts (DeepSeek for production, faux for tests).
@@ -43,7 +44,10 @@ export function setDefaultModel(model: Model<string>): void {
   defaultModel = model;
 }
 
-export type EventForwarder = (conversationId: string, event: AgentSessionEvent) => void;
+export type EventForwarder = (
+  conversationId: string,
+  event: AgentSessionEvent,
+) => void;
 let eventForwarder: EventForwarder | null = null;
 export function setEventForwarder(fn: EventForwarder): void {
   eventForwarder = fn;
@@ -66,14 +70,19 @@ export async function getOrCreateSession(
 ): Promise<{ session: AgentSession; sessionFilePath: string }> {
   const existing = sessions.get(opts.conversationId);
   if (existing) {
-    return { session: existing.session, sessionFilePath: existing.sessionManager.getSessionFile() ?? '' };
+    return {
+      session: existing.session,
+      sessionFilePath: existing.sessionManager.getSessionFile() ?? "",
+    };
   }
 
   if (!sessionDir) {
-    throw new Error('sessionDir not set. Call setSessionDir() at startup.');
+    throw new Error("sessionDir not set. Call setSessionDir() at startup.");
   }
   if (!defaultModel) {
-    throw new Error('No model configured. Call setDefaultModel() before creating sessions.');
+    throw new Error(
+      "No model configured. Call setDefaultModel() before creating sessions.",
+    );
   }
 
   // Resume an existing JSONL file, or start a new persisted session under sessionDir.
@@ -89,18 +98,26 @@ export async function getOrCreateSession(
   //      Windows without Git for Windows we fall back to bundled busybox-w32)
   const customTools = [];
   const gdalEnv = getBundledGdalEnv();
-  const shellPath = resolveShellPath();
-  if (gdalEnv || shellPath) {
+  const shellConfig = resolveShellConfig();
+  if (gdalEnv || shellConfig) {
     customTools.push(
       createBashTool(opts.cwd, {
-        shellPath: shellPath ?? undefined,
+        shellPath: shellConfig?.shell ?? undefined,
+        // BusyBox requires `sh -c` args instead of just `-c`, but
+        // pi-coding-agent's getShellConfig always uses `["-c"]`.
+        // Provide custom operations that use the correct args.
+        ...(shellConfig && shellConfig.args.length > 1
+          ? {
+              operations: createBusyboxOperations(shellConfig),
+            }
+          : {}),
         spawnHook: (ctx) => ({
           ...ctx,
           env: {
             ...ctx.env,
             ...(gdalEnv?.extraEnv ?? {}),
             PATH: gdalEnv
-              ? `${gdalEnv.path}${path.delimiter}${ctx.env.PATH ?? process.env.PATH ?? ''}`
+              ? `${gdalEnv.path}${path.delimiter}${ctx.env.PATH ?? process.env.PATH ?? ""}`
               : ctx.env.PATH,
           },
         }),
@@ -111,13 +128,13 @@ export async function getOrCreateSession(
   const { session } = await createAgentSession({
     cwd: opts.cwd,
     model: defaultModel,
-    thinkingLevel: 'off',
+    thinkingLevel: "off",
     authStorage,
     modelRegistry,
     settingsManager,
     sessionManager: sm,
     resourceLoader: createGisResourceLoader(),
-    tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'],
+    tools: ["read", "bash", "edit", "write", "grep", "find", "ls"],
     customTools,
   });
 
@@ -131,8 +148,12 @@ export async function getOrCreateSession(
   const sessionFilePath = sm.getSessionFile();
   if (!sessionFilePath) {
     // Avoid poisoning the cache with a session that has no backing file.
-    try { session.dispose(); } catch { /* ignore */ }
-    throw new Error('SessionManager did not allocate a session file');
+    try {
+      session.dispose();
+    } catch {
+      /* ignore */
+    }
+    throw new Error("SessionManager did not allocate a session file");
   }
   sessions.set(opts.conversationId, { session, sessionManager: sm });
   return { session, sessionFilePath };
@@ -159,6 +180,86 @@ export function disposeAllSessions(): void {
     }
   }
   sessions.clear();
+}
+
+/**
+ * Create bash operations for shells that need non-standard args.
+ *
+ * pi-coding-agent's built-in getShellConfig always passes ["-c"] as the
+ * args to the shell.  This works for bash / sh but NOT for BusyBox, which
+ * requires `busybox64.exe sh -c "command"` (the `sh` applet argument must
+ * come before `-c`).
+ *
+ * This function returns an `operations` object that can be passed to
+ * `createBashTool` instead of relying on the built-in shell resolution.
+ */
+function createBusyboxOperations(shellConfig: ShellConfig): {
+  exec: (
+    command: string,
+    cwd: string,
+    ctx: {
+      onData: (data: Buffer) => void;
+      signal?: AbortSignal;
+      timeout?: number;
+      env?: NodeJS.ProcessEnv;
+    },
+  ) => Promise<{ exitCode: number }>;
+} {
+  return {
+    exec(command, cwd, { onData, signal, timeout, env }) {
+      return new Promise((resolve, reject) => {
+        const child = spawn(shellConfig.shell, [...shellConfig.args, command], {
+          cwd,
+          env,
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        child.stdout?.on("data", onData);
+        child.stderr?.on("data", onData);
+
+        let timedOut = false;
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+        if (timeout !== undefined && timeout > 0) {
+          timeoutHandle = setTimeout(() => {
+            timedOut = true;
+            child.kill("SIGTERM");
+          }, timeout * 1000);
+        }
+
+        const onAbort = () => {
+          try {
+            child.kill("SIGTERM");
+          } catch {
+            /* ignore */
+          }
+        };
+        if (signal) {
+          if (signal.aborted) onAbort();
+          else signal.addEventListener("abort", onAbort, { once: true });
+        }
+
+        child.on("error", (err) => {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+          if (signal) signal.removeEventListener("abort", onAbort);
+          reject(err);
+        });
+
+        child.on("close", (code) => {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+          if (signal) signal.removeEventListener("abort", onAbort);
+          if (signal?.aborted) {
+            reject(new Error("aborted"));
+            return;
+          }
+          if (timedOut) {
+            reject(new Error(`timeout:${timeout}`));
+            return;
+          }
+          resolve({ exitCode: code ?? 0 });
+        });
+      });
+    },
+  };
 }
 
 export { authStorage, modelRegistry };
