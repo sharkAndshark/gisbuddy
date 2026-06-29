@@ -72,6 +72,10 @@
         "to": "icon-duck.png"
       },
       {
+        "from": "build/icon-duck.ico",
+        "to": "icon-duck.ico"
+      },
+      {
         "from": "build/busybox64.exe",
         "to": "busybox64.exe",
         "filter": [
