@@ -99,6 +99,62 @@ dist-full-win URL='':
   just dist-win
   @echo "✓ 完整分发包完成（含 GDAL，Windows）"
 
+# ── 一键发行（本地开发者用） ──────────────────────
+
+# Windows 一键发行：自动准备资源 + 构建产出 NSIS 安装包
+#
+# 用法：
+#   just release-win             # 默认（尝试代码签名）
+#   just release-win unsigned=1  # 跳过代码签名（无证书 / 无符号链接权限时）
+#
+# 前置条件（resource-prepare-win 会自动检查并准备缺失项）：
+#   - 图标：缺失时调用 build-icon-win.mjs
+#   - BusyBox：缺失时下载
+#   - GDAL：缺失时从 $CONDA_PREFIX / $MAMBA_ROOT_PREFIX/envs/gdal 提取
+#     （需预装 micromamba/conda + gdal；或手动预填充 gdal-bin/ 跳过）
+#
+# 产出：release/GISBuddy-<version>-win-x64.exe
+release-win unsigned='0':
+  @echo "========== GISBuddy Windows Release =========="
+  just resource-prepare-win
+  @echo "=== 编译 TypeScript + renderer ==="
+  npm run build
+  @echo "=== electron-builder 打包 ==="
+  @if [ "{{unsigned}}" = "1" ]; then \
+    echo "  (跳过代码签名)"; \
+    npx electron-builder --win --config.win.signAndEditExecutable=false --config.win.forceCodeSigning=false; \
+  else \
+    npx electron-builder --win; \
+  fi
+  @echo ""
+  @echo "✓ 发行包已生成："
+  @ls -lh release/*.exe 2>/dev/null || echo "  (检查 release/ 目录)"
+
+# 准备 Windows 打包资源（图标 + BusyBox + GDAL），缺失才准备
+resource-prepare-win:
+  # 1. 图标
+  @if [ ! -f build/icon-duck.ico ]; then \
+    echo "=== 生成 Windows 图标 ==="; \
+    node scripts/build-icon-win.mjs; \
+  else echo "✓ build/icon-duck.ico 已存在"; fi
+  # 2. BusyBox
+  @if [ ! -f build/busybox64.exe ]; then \
+    just fetch-busybox; \
+  else echo "✓ build/busybox64.exe 已存在"; fi
+  # 3. GDAL
+  @if [ ! -d gdal-bin ] || [ -z "$$(ls -A gdal-bin 2>/dev/null)" ]; then \
+    echo "=== gdal-bin/ 缺失，从 conda env 提取 ==="; \
+    if [ -z "$${CONDA_PREFIX:-}" ] && [ -z "$${MAMBA_ROOT_PREFIX:-}" ]; then \
+      echo "✗ 找不到 CONDA_PREFIX 或 MAMBA_ROOT_PREFIX"; \
+      echo "  请先 'micromamba create -n gdal gdal python' 并激活"; \
+      echo "  或预填充 gdal-bin/ 后重试"; \
+      exit 1; \
+    fi; \
+    conda_prefix="$${CONDA_PREFIX:-$${MAMBA_ROOT_PREFIX}/envs/gdal}"; \
+    node scripts/bundle-gdal-win-conda.mjs "$$conda_prefix"; \
+  else echo "✓ gdal-bin/ 已存在"; fi
+
+
 # ── 图标 ────────────────────────────────────────────
 
 # 下载 Windows 端捆绑的 busybox-w32 shell（构建前置，仅 Windows 打包需要）

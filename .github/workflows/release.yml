@@ -86,18 +86,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build (TypeScript + renderer)
-        run: npm run build
+      - name: Install just (command runner)
+        uses: extractions/setup-just@v2
 
-      - name: Generate Windows icon
-        run: node scripts/build-icon-win.mjs
-
-      - name: Download busybox-w32 (bundled shell fallback)
-        shell: bash
-        run: |
-          curl -sL -o build/busybox64.exe https://frippery.org/files/busybox/busybox64.exe
-          ls -lh build/busybox64.exe
-
+      # resource-prepare-win 需要 CONDA_PREFIX 才能提取 GDAL
       - name: Install GDAL via micromamba
         uses: mamba-org/setup-micromamba@v2
         with:
@@ -107,14 +99,13 @@ jobs:
             python=3.12
           cache-environment: true
 
-      - name: Bundle GDAL (from conda env)
+      - name: Release build (Windows)
         shell: bash
-        run: node scripts/bundle-gdal-win-conda.mjs "$MAMBA_ROOT_PREFIX/envs/gdal"
-
-      - name: Build & package (nsis)
-        run: npx electron-builder --win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # CI 默认 unsigned=1：winCodeSign 解压需符号链接权限，CI runner 虽有权限
+        # 但无代码签名证书；不签名不影响 NSIS 安装包可用性
+        run: just release-win unsigned=1
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
