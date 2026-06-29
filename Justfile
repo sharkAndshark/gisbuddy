@@ -3,8 +3,8 @@
 # 可选: Homebrew (用于 bundle-gdal)
 
 
-# Windows: use Git Bash (PowerShell cannot parse bash recipe syntax)
-set windows-shell := ["C:/app/Git/bin/bash.exe", "-c"]
+# Windows: let just auto-detect Git Bash (don't hardcode path).
+# CI runner has it at C:/Program Files/Git/bin/bash.exe; local installs vary.
 default:
   @just --list --justfile {{justfile()}}
 
