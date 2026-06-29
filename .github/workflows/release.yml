@@ -105,12 +105,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # CI 默认 unsigned=1：无代码签名证书，不签名不影响 NSIS 包可用性
-        # 显式传 CONDA_PREFIX：micromamba action 的 CONDA_PREFIX 指向基础环境，
-        # GDAL 装在 envs/gdal 子目录
         run: |
-          export CONDA_PREFIX="$MAMBA_ROOT_PREFIX/envs/gdal"
-          just release-win unsigned=1
+          just release-win unsigned=1 conda-prefix="$MAMBA_ROOT_PREFIX/envs/gdal"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

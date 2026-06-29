@@ -126,10 +126,10 @@ prepare-cache:
     echo "✓ electron-builder 缓存已就绪"; \
   fi
 
-release-win unsigned='0':
+release-win unsigned='0' conda-prefix='':
   @echo "========== GISBuddy Windows Release =========="
   just prepare-cache
-  just resource-prepare-win
+  just resource-prepare-win {{conda-prefix}}
   @echo "=== 编译 TypeScript + renderer ==="
   npm run build
   @echo "=== electron-builder 打包 ==="
@@ -144,7 +144,7 @@ release-win unsigned='0':
   @ls -lh release/*.exe 2>/dev/null || echo "  (检查 release/ 目录)"
 
 # 准备 Windows 打包资源（图标 + BusyBox + GDAL），缺失才准备
-resource-prepare-win:
+resource-prepare-win conda-prefix='':
   # 1. 图标
   @if [ ! -f build/icon-duck.ico ]; then \
     echo "=== 生成 Windows 图标 ==="; \
@@ -157,14 +157,13 @@ resource-prepare-win:
   # 3. GDAL
   @if [ ! -d gdal-bin ] || [ -z "$$(ls -A gdal-bin 2>/dev/null)" ]; then \
     echo "=== gdal-bin/ 缺失，从 conda env 提取 ==="; \
-    if [ -z "$${CONDA_PREFIX:-}" ] && [ -z "$${MAMBA_ROOT_PREFIX:-}" ]; then \
-      echo "✗ 找不到 CONDA_PREFIX 或 MAMBA_ROOT_PREFIX"; \
-      echo "  请先 'micromamba create -n gdal gdal python' 并激活"; \
+    if [ -z "{{conda-prefix}}" ]; then \
+      echo "✗ 请提供 conda-prefix 参数，例如："; \
+      echo "  just resource-prepare-win conda-prefix="C:/path/to/gdal/env""; \
       echo "  或预填充 gdal-bin/ 后重试"; \
       exit 1; \
     fi; \
-    conda_prefix="$${CONDA_PREFIX:-$${MAMBA_ROOT_PREFIX}/envs/gdal}"; \
-    node scripts/bundle-gdal-win-conda.mjs "$$conda_prefix"; \
+    node scripts/bundle-gdal-win-conda.mjs "{{conda-prefix}}"; \
   else echo "✓ gdal-bin/ 已存在"; fi
 
 
