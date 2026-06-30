@@ -109,7 +109,7 @@ function createTray() {
 
     const ctx = Menu.buildFromTemplate([
       {
-        label: "Show GISBuddy",
+        label: "显示主窗口",
         click: () => {
           if (mainWindow) {
             mainWindow.show();
@@ -119,7 +119,7 @@ function createTray() {
       },
       { type: "separator" },
       {
-        label: "Quit",
+        label: "退出",
         click: () => {
           isQuitting = true;
           app.quit();
