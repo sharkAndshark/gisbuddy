@@ -413,9 +413,9 @@ function renderSidebar() {
               >
               <button
                 @click=${(e: Event) => {
-                e.stopPropagation();
-                handleDeleteConversation(conv.id);
-              }}
+                  e.stopPropagation();
+                  handleDeleteConversation(conv.id);
+                }}
                 class="project-action-btn"
                 style="border:none;background:none;color:#a09886;cursor:pointer;font-size:11px;padding:0 4px;${NO_DRAG}"
                 title="删除对话"
@@ -553,7 +553,7 @@ function renderFileTree() {
     >
       <div
         @dblclick=${handleDragDblClick}
-        style="height:38px;flex-shrink:0;display:flex;align-items:center;padding:0 12px;border-bottom:1px solid #d8d0c2;font-size:11px;color:#7a7468;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${DRAG}"
+        style="height:38px;flex-shrink:0;display:flex;align-items:center;padding:0 12px;padding-right:${isMac ? "12px" : "140px"};border-bottom:1px solid #d8d0c2;font-size:11px;color:#7a7468;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${DRAG}"
       >
         📂
         ${currentDir ? currentDir.slice(currentDir.lastIndexOf("/") + 1) || currentDir : "—"}
